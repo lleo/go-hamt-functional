@@ -1,5 +1,6 @@
 /*
-Package hamt implements a persistent Hash Array Mapped Trie (HAMT).
+Package hamt implements a functional Hash Array Mapped Trie (HAMT). Functional
+is defined as immutable and persistent. FIXME more explanation.
 
 A Hash Array Mapped Trie (HAMT) is a data structure to map a key (a byte slice)
 to value (a interface{}; for a generic item). To do this we use a Trie data-
@@ -37,9 +38,19 @@ const TABLE uint = 1 << NBITS
 
 const sixtyBitMask = 1<<60 - 1
 
-// The maximum depth of a HAMT ranges between 0 and 9, for 10 levels
+// The maximum depthof a HAMT ranges between 0 and 9, for 10 levels
 // total and cunsumes 60 of the 64 bit hashcode.
 const MAXDEPTH uint = 9
+
+const ASSERT_CONST bool = treu
+
+func ASSERT(test bool, msg string) {
+	if ASSERT_CONST {
+		if test {
+			panic(string)
+		}
+	}
+}
 
 // This function calcuates a 64-bit unsigned integer hashcode from an
 // arbitrary list of bytes. It uses the FNV1 hashing algorithm:
@@ -48,7 +59,7 @@ const MAXDEPTH uint = 9
 //
 func hash64(bs []byte) uint64 {
 	var h = fnv.New64()
-	_, _ = h.Write(bs)
+	h.Write(bs)
 	return h.Sum64()
 }
 
@@ -63,7 +74,7 @@ func makeHashPath(depth uint, hash uint64) uint64 {
 }
 
 func hashPathMask(depth) uint64 {
-	return 1<<(depth&NBITS) - 1
+	return 1<<(depth*NBITS) - 1
 }
 
 // The hash60Equal function compares the significant 60 bits of hash that
@@ -97,18 +108,31 @@ func (h Hamt) IsEmpty() bool {
 	return h.root == nil
 }
 
-func (h Hamt) copyUp(oldNode nodeI, newNode nodeI, path pathT) Hamt {
+func (h Hamt) copyUp(oldTable, newTable tableI, path pathT) Hamt {
+	if path.isEmpty() {
+		if h.root != oldTable {
+			panic("WTF! path.isEmpty() and h.root != oldTable")
+		}
+		return Hamt{root: newTable}
+	}
+
 	oldParent := path.pop()
 
 	//newParent := oldParent.replace(oldNode, newNode)
-	newParent := oldParent.put(oldNode.hashcode(), newNode)
-
-	if oldParent == h.root { // aka path.isEmpty()
-		newHamt := Hamt{root: newParent}
-		return newHamt
-	}
+	newParent := oldParent.set(oldNode.hashcode(), newNode)
 
 	return h.copyUp(oldParent, newParent, path)
+}
+
+func (h Hamt) copyUpLeaf(oldLeaf, newLeaf, path) Hamt {
+	if path.isEmpty() {
+		panic("copyUpLeaf() call where path.isEmpty()")
+	}
+
+	var oldTable = path.pop()
+	var newTable = oldTable.set(hash, newLeaf)
+
+	return h.copyUp(oldTable, newTable, path)
 }
 
 func (h Hamt) Get(key []byte) (interface{}, bool) {
@@ -121,7 +145,7 @@ func (h Hamt) Get(key []byte) (interface{}, bool) {
 	// We know h.root != nil (above IsEmpty test) and h.root is a tableI
 	// intrface compliant struct.
 	var curTable = h.root
-	var curNode = curTable.get(key, hash)
+	var curNode = curTable.get(hash)
 
 	for depth := 0; curNode != nil && depth <= MAXDEPTH; depth++ {
 		//if curNode ISA leafI
@@ -154,17 +178,17 @@ func (h Hamt) Put(key []byte, val interface{}) (newHamt Hamt, newVal bool) {
 	 **********************************************************/
 	if h.IsEmpty() {
 		leaf := NewFlatLeaf(hash, key, val)
-		newHamt.root = NewCompressedTable(0, leaf)
+		newHamt.root = NewCompressedTable(0, hash, leaf)
 		return
 	}
 
+	var path = newPathT()
 	var curTable = h.root
 	var depth uint
 	var hashPath uint64 = 0
+	var newLeaf = NewFlatLeaf(hash, key, val)
 
-	for depth = 0; depth <= MAXDEPTH; depth++ {
-
-		path.push(curTable)
+	for depth = 0; depth < MAXDEPTH; depth++ {
 
 		curNode := curTable.get(hash, key)
 
@@ -172,8 +196,7 @@ func (h Hamt) Put(key []byte, val interface{}) (newHamt Hamt, newVal bool) {
 		 * If the table entry is empty, insert a leaf. *
 		 ***********************************************/
 		if curNode == nil {
-			newLeaf = NewFlatLeaf(hash, key, val)
-			newTable = curTable.put(hash, newLeaf)
+			newTable = curTable.set(hash, newLeaf)
 			h.copyUp(curTable, newTable, path)
 			return
 		}
@@ -188,15 +211,23 @@ func (h Hamt) Put(key []byte, val interface{}) (newHamt Hamt, newVal bool) {
 			 * the way down to MAXDEPTH and part of the hashcode matches,
 			 * or we are at MAXDEPTH and 60 of 64 bits match.
 			 **************************************************************/
-			if depth == MAXDEPTH || hash60Equal(oldLeaf.hashcode(), hash) {
-				newLeaf, newVal := oldLeaf.put(key, val)
+			if hash60Equal(oldLeaf.hashcode(), hash) {
+				//if oldLeaf is a flatLeaf this will promote it to a
+				// collisionLeaf, else it already is a collisionLeaf.
+				path.push(curTable)
+				newLeaf, newVal = oldLeaf.put(key, val)
 				newHamt.copyUpLeaf(oldLeaf, newLeaf, path)
 				return
 			}
 
-			curTable = NewCompressedTable(depth+1, hash, oldLeaf)
-			continue
+			var newLeaf = NewFlatLeaf(hash, key, val)
+			curTable = NewCompressedTable(depth, hash, oldLeaf, newLeaf)
+
+			h.copyUp(curTable, newTable, path)
+			return
 		}
+
+		path.push(curTable)
 
 		/***********************************
 		 * The tale entry MUST BE A tableI *
@@ -227,9 +258,11 @@ type nodeI interface {
 
 type tableI interface {
 	nodeI
+	copy() tableI
 	get(hash uint64) nodeI
-	put(hash uint64, entry nodeI) tableI
-	del(hash uint64) (tableI, nodeI)
+	set(hash uint64, entry nodeI) tableI
+	clear(hash uint64) (tableI, nodeI)
+	nentries() uint
 }
 
 type compressedTable struct {
@@ -250,25 +283,80 @@ type tableEntry struct {
 
 type tableS []tableEntry
 
-func NewCompressedTable(depth uint, hash uint64, entry nodeI) tableI {
+func NewCompressedTable(depth uint, hashPath uint64, lf leafI) tableI {
+	ASSERT(depth > -1 && depth < MAXDEPTH+1, "parameter 0 >= depth >= 9")
+
+	var idx = index(lf.hashcode(), depth)
+
 	var ct = new(compressedTable)
-
-	//ct.hashPath = hash & (1<<(depth*NBITS) - 1)
-	ct.hashPath = makeHashPath(depth, hash)
+	ct.hashPath = hashPath
 	ct.depth = depth
-	ct.nodes = make([]nodeI, 1, 2)
-
-	// First entry
-	var idx = index(hash, depth)
-	ct.nodeMap = 0
-	ct.nodeMap &= (1 << idx)
-	ct.nodes[0] = entry
+	ct.nodeMap = 1 << idx
+	ct.nodes = make([]nodeI, 1)
+	ct.nodes[0] = lf
 
 	return ct
 }
 
+func NewCompressedTable2(depth uint, hashPath uint64, lf1, lf2 leafI) tableI {
+	ASSERT(depth > -1 && depth < MAXDEPTH+1, "parameter 0 >= depth >= 9")
+
+	var retTable = new(compressedTable) // return compressedTable
+	retTable.hashPath = hashPath
+	retTable.depth = depth
+
+	var curTable = retTable //*compressedTable
+	var d uint
+	for d = depth; d < MAXDEPTH; d++ {
+		var idx1 = index(lf1.hashcode(), d)
+		var idx2 = index(lf2.hashcode(), d)
+		curTable.nodes = make([]nodeI, 2)
+
+		if idx1 != idx2 {
+			curTable.nodeMap &= 1 << idx1
+			curTable.nodeMap &= 1 << idx2
+			if idx1 < idx2 {
+				curTable.nodes[0] = lf1
+				curTable.nodes[1] = lf2
+			} else {
+				curTable.nodes[0] = lf2
+				curTable.nodes[1] = lf1
+			}
+
+			break
+		}
+
+		// idx1 == idx2 && continue
+		var newTable = new(compressedTable)
+		newTable.hashPath = hashPath & (idx1 << ((d + 1) * NBITS))
+		newTable.depth = d + 1
+
+		curTable.nodeMap = 1 << idx1
+		curTable.nodes = append(curTable.nodes, newTable)
+
+		curTable = newTable
+	}
+	if d == MAXDEPTH {
+		// lf1.hash60 == curTable.hashPath
+		// lf1.hashcode() == lf2.hashcode()
+		lf := lf1.put(lf2)
+		curTable.set(lf.hashcode(), lf)
+	}
+
+	return retTable
+}
+
 func (t compressedTable) hashcode() uint64 {
 	return t.hashPath
+}
+
+func (t compressedTable) copy() tableI {
+	var nt = new(compressedTable)
+	nt.hashPath = t.hashPath
+	nt.depth = t.depth
+	nt.nodeMap = t.nodeMap
+	nt.nodes = append(nt.nodes, t.nodes...)
+	return nt
 }
 
 func (t compressedTable) get(hash uint64) nodeI {
@@ -291,27 +379,40 @@ func (t compressedTable) get(hash uint64) nodeI {
 	return node
 }
 
-func (t compressedTable) put(hash uint64, entry nodeI) tableI {
+func (t compressedTable) set(hash uint64, entry nodeI) tableI {
+	nt := t.copy()
+
 	// Get the regular index of the node we want to access
-	var idx = index(hash, t.depth) // 0..63
-	var bit = 1 << idx
+	var idx = index(hash, nt.depth) // 0..63
+	var bit = 1 << idx              //is the slot
 
-	var bitMask = 1<<(idx+1) - 1
+	var bitMask = 1<<idx - 1
 
-	if (t.nodeMap & bit) == 0 {
-		// entrySlot is empty, so put entryNodeI in entrySlot
+	if (nt.nodeMap & bit) == 0 {
+		// slot is empty, so put nodeI in slot
+		nt.nodeMap &= bit
+		var i = BitCount64(nt.nodeMap & bitMask)
 
-	} else {
-		// entrySlot is used,
-		var i = BitCount64(t.nodeMap & bitMask)
+		//insert entry into the i'th spot of t.nodes
+		nt.nodes = append(nt.nodes[:i], append([]nodeI{entry}, nt.nodes[i:]))
 
+		return nt
 	}
 
-	var nt = NewCompressedTable(t.depth+1, hash, entry)
+	// slot is used
+	//
+	var i = BitCount64(t.nodeMap & bitMask)
 
+	oldEnts := oldTable.entries().copy()
+	newEnts := make([]nodeI, len(oldEnts))
+	copy(newEnts, oldEnts)
+
+	var nt = NewCompressedTable(t.depth+1, hash, newEnts)
+
+	return nt
 }
 
-func (t compressedTable) del(hash uint64) (tableI, nodeI) {
+func (t compressedTable) clear(hash uint64) (tableI, nodeI) {
 	return nil, nil, false
 }
 
@@ -334,8 +435,16 @@ func (t fullTable) hashcode() uint64 {
 	return t.hashPath
 }
 
+func (t fullTable) copy() nodeI {
+	return nil
+}
+
 func (t fullTable) get(hash uint64) nodeI {
 	return nil, false
+}
+
+func (t fullTable) set(hash uint64, entry nodeI) nodeI {
+	return nil
 }
 
 func (t fullTable) put(hash uint64, entry nodeI) tableI {
@@ -347,7 +456,8 @@ func (t fullTable) del(hash uint64) (tableI, nodeI) {
 }
 
 type leafI interface {
-	nodeI //is this necessary?
+	nodeI
+	//copy() leafI
 	get(key []byte) (interface{}, bool)
 	put(key []byte, val interface{}) (leafI, bool)
 	del(key []byte) (leafI, interface{}, bool)
@@ -369,6 +479,14 @@ func (l flatLeaf) hashcode() uint64 {
 	return l.hash60
 }
 
+//func (l flatLeaf) copy() leafI {
+//	nl = new(flatLeaf)
+//	nl.hash60 = l.hash60
+//	nl.key = l.key
+//	nl.val = l.val
+//	return nl
+//}
+
 func (l flatLeaf) get(key []byte) (interface{}, bool) {
 	if byteSlicesEqual(l.key, key) {
 		return l.val, true
@@ -377,7 +495,7 @@ func (l flatLeaf) get(key []byte) (interface{}, bool) {
 }
 
 //
-func (l flatLeaf) put(key []byte, value interface{}) (leafI, bool) {
+func (l floatLeaf) put(key []byte, value interface{}) (leafI, bool) {
 	if byteSlicesEqual(l.key, key) {
 		oval := l.val
 		l.val = value
@@ -410,12 +528,9 @@ type collisionLeaf struct {
 }
 
 func NewCollisionLeaf(hash uint64, kvs []keyVal) collisionLeaf {
-	hash60 := hash & sixtyBitMask
-
 	leaf := new(collisionLeaf)
-	leaf.hash = hash60
-	//leaf.kvs = kvs
-	copy(leaf.kvs, kvs)
+	leaf.hash60 = hash & sixtyBitMask
+	leaf.kvs = append(leaf.kvs, kvs...)
 
 	return leaf
 }
@@ -434,11 +549,40 @@ func (l collisionLeaf) get(key []byte) (interface{}, bool) {
 }
 
 func (l collisionLeaf) put(key []byte, val interface{}) (leafI, bool) {
-	return nil, false
+	nl := new(collisionLeaf)
+	nl.hash60 = l.hash60
+	nl.kvs = append(nl.kvs, l.kvs...)
+	nl.kvs = append(nl.kvs, keyVal{key, val})
+	return nl
 }
 
 func (l collisionLeaf) del(key []byte) (leafI, interface{}, bool) {
-	return nil, nil, false
+	if len(l.kvs) == 2 {
+		if byteSliceEqual(key, l.kvs[0].key) {
+			return NewFlatLeaf(l.hash60, l.kvs[1].key, l.kvs[1].val), l.kvs[0].val, true
+		}
+		if byteSliceEqual(key, l.kvs[1].key) {
+			return NewFlatLeaf(l.hash60, l.kvs[0].key, l.kvs[0].val), l.kvs[1].val, true
+		}
+		return nil, nil, false
+	}
+
+	var retval interface{}
+	var removed bool = false
+	var nl = new(collisionLeaf)
+
+	nl.hash60 = l.hash60
+
+	for i := 0; i < len(l.kvs); i++ {
+		if !byteSliceEqual(key, l.kvs[i].key) {
+			nl.kvs = append(nl.kvs, l.kvs[i])
+		} else {
+			retVal = l.kvs[i].val
+			removed = true
+		}
+	}
+
+	return nl, retVal, removed
 }
 
 //byteSliceEqual function
