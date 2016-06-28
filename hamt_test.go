@@ -67,12 +67,13 @@ func TestEmptyPutThrice(t *testing.T) {
 	var h = EMPTY
 
 	for i := range keys {
-		t.Logf(" for i=%d calling h.Put(\"%s\", %d)\n", i, keys[i], vals[i])
+		t.Logf("for i=%d calling h.Put(\"%s\", %d)\n", i, keys[i], vals[i])
 		h, _ = h.Put(keys[i], vals[i])
+		t.Log("h = ", h)
 	}
 
-	t.LogF("h=\n%s", h.String())
-	t.Logf("h.root=\n%s", h.root.String())
+	t.Logf("h=\n%s", h.String())
+	//	t.Logf("h.root=\n%s", h.root.String())
 
 	for i := range vals {
 		t.Logf("for i=%d calling h.Get(\"%s\")", i, keys[i])

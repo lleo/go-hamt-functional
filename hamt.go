@@ -84,9 +84,13 @@ func hashPathMask(depth uint) uint64 {
 }
 
 func hashPathString(hashPath uint64, depth uint) string {
-	var strs = make([]string, depth)
-	for i := depth; i >= 0; i-- {
-		var idx = index(hashPath, i)
+	var strs = make([]string, depth+1)
+	//lgr.Printf("hashPathString: len(strs)=%d; cap(strs)=%d;", len(strs), cap(strs))
+
+	for i := int(depth); i >= 0; i-- {
+		var ui = uint(i)
+		var idx = index(hashPath, ui)
+		//lgr.Printf("strs[%d] = fmt.Sprintf(\"%%06b\", %d)", ui, idx)
 		strs[i] = fmt.Sprintf("%06b", idx)
 	}
 	return strings.Join(strs, " ")
@@ -95,13 +99,17 @@ func hashPathString(hashPath uint64, depth uint) string {
 func nodeMapString(nodeMap uint64) string {
 	var strs = make([]string, 7)
 
+	//lgr.Printf("nodeMapString: BitCount64(nodeMap) = %d", BitCount64(nodeMap))
+
 	var top4 = nodeMap >> 60
-	strs[6] = fmt.Sprintf("%04b", top4)
+	strs[0] = fmt.Sprintf("%04b", top4)
 
 	const tenBitMask uint64 = 1<<10 - 1
-	for i := uint(5); i >= 0; i-- {
-		tenBitVal := (nodeMap & tenBitMask << (i * 10)) >> (i * 10)
-		strs[i] = fmt.Sprintf("%010b", tenBitVal)
+	for i := int(0); i < 6; i++ {
+		var ui = uint(i)
+		//lgr.Printf("i=%d; tenBitMask : %064b", ui, tenBitMask<<(ui*10))
+		tenBitVal := (nodeMap & (tenBitMask << (ui * 10))) >> (ui * 10)
+		strs[6-ui] = fmt.Sprintf("%010b", tenBitVal)
 	}
 
 	return strings.Join(strs, " ")
@@ -185,12 +193,14 @@ func (h Hamt) Get(key []byte) (interface{}, bool) {
 		return nil, false
 	}
 
+	lgr.Println("h = ", h)
+
 	var hash = hash64(key)
 	var hash60 = hash & sixtyBitMask
 
 	lgr.Printf("key    : %s", key)
-	lgr.Printf("hash   : 0b%064b", hash)
-	lgr.Printf("hash60 : 0b%064b", hash60)
+	lgr.Printf("hash   : 0x%016x", hash)
+	lgr.Printf("hash60 : 0x%016x", hash60)
 
 	// We know h.root != nil (above IsEmpty test) and h.root is a tableI
 	// intrface compliant struct.
@@ -314,6 +324,7 @@ func (h Hamt) Del(key []byte) (Hamt, interface{}, bool) {
 //
 type nodeI interface {
 	hashcode() uint64
+	String() string
 }
 
 type tableI interface {
@@ -421,15 +432,20 @@ func (t compressedTable) copy() tableI {
 }
 
 func (t compressedTable) String() string {
-	var strs = make([]string, 2)
+	var strs = make([]string, 2+len(t.nodes))
 	// Sprintf depth hashPath
-	strs[0] = fmt.Sprintf("%d %s\n", t.depth, hashPathString(t.hashPath, t.depth))
+	strs[0] = fmt.Sprintf("%d %s", t.depth, hashPathString(t.hashPath, t.depth))
 
 	// Sprintf 0b64 of nodeMap
 	strs[1] = nodeMapString(t.nodeMap)
 
+	//strs[2] = fmt.Sprintf("len(t.nodes) = %d", len(t.nodes))
+
 	// for each node in nodes
 	//     String node
+	for i, n := range t.nodes {
+		strs[2+i] = n.String()
+	}
 
 	return strings.Join(strs, "\n")
 }
@@ -537,7 +553,6 @@ func (t fullTable) nentries() uint {
 
 type leafI interface {
 	nodeI
-	//copy() leafI
 	get(key []byte) (interface{}, bool)
 	put(key []byte, val interface{}) (leafI, bool) //bool == replace? val
 	del(key []byte) (leafI, interface{}, bool)     //bool == deleted? key
@@ -559,13 +574,10 @@ func (l flatLeaf) hashcode() uint64 {
 	return l.hash60
 }
 
-//func (l flatLeaf) copy() leafI {
-//	nl = new(flatLeaf)
-//	nl.hash60 = l.hash60
-//	nl.key = l.key
-//	nl.val = l.val
-//	return nl
-//}
+func (l flatLeaf) String() string {
+	// flatLeaf{hash60:0x0123456789abcde01, key:"foo", val:1}
+	return fmt.Sprintf("flatLeaf{hash60:0x%016x, key:[]byte(\"%s\"), val:%v}", l.hash60, l.key, l.val)
+}
 
 func (l flatLeaf) get(key []byte) (interface{}, bool) {
 	if byteSlicesEqual(l.key, key) {
@@ -601,6 +613,10 @@ type keyVal struct {
 	val interface{}
 }
 
+func (kv keyVal) String() string {
+	return fmt.Sprintf("{[]byte(\"%s\"), val:%v}", kv.key, kv.val)
+}
+
 type collisionLeaf struct {
 	hash60 uint64 //hash64(key) & sixtyBitMask
 	kvs    []keyVal
@@ -616,6 +632,15 @@ func NewCollisionLeaf(hash uint64, kvs []keyVal) *collisionLeaf {
 
 func (l collisionLeaf) hashcode() uint64 {
 	return l.hash60
+}
+
+func (l collisionLeaf) String() string {
+	var kvstrs = make([]string, len(l.kvs))
+	for i := 0; i < len(l.kvs); i++ {
+		kvstrs[i] = l.kvs[i].String()
+	}
+	var kvstr = strings.Join(kvstrs, ",")
+	return fmt.Sprintf("{hash60:%016x, kvs:[]kv{%s}}", l.hash60, kvstr)
 }
 
 func (l collisionLeaf) get(key []byte) (interface{}, bool) {
