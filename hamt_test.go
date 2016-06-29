@@ -3,6 +3,8 @@ package hamt
 import (
 	"os"
 	"testing"
+
+	"github.com/lleo/util"
 )
 
 type entry struct {
@@ -33,8 +35,21 @@ func path2hash(path []uint8) uint64 {
 	return hashPath
 }
 
+var midNumEnts []keyVal
+
 func TestMain(m *testing.M) {
 	// SETUP
+
+	midNumEnts = make([]keyVal, 0, 32) //binary growth
+	var s = util.Str("")
+	//nEnts := 10000 //ten thousand
+	nEnts := 1000
+	for i := 0; i < nEnts; i++ {
+		s = s.Inc(1) //get off "" first
+		var key = []byte(s)
+		var val = i + 1
+		midNumEnts = append(midNumEnts, keyVal{key, val})
+	}
 
 	// RUN
 	xit := m.Run()
@@ -45,6 +60,10 @@ func TestMain(m *testing.M) {
 }
 
 func TestEmptyPutOnce(t *testing.T) {
+	lgr.Println("########################")
+	lgr.Println("### TestEmptyPutOnce ###")
+	lgr.Println("########################")
+
 	key := []byte("foo")
 
 	h, _ := EMPTY.Put(key, 1)
@@ -61,19 +80,22 @@ func TestEmptyPutOnce(t *testing.T) {
 }
 
 func TestEmptyPutThrice(t *testing.T) {
+	lgr.Println("##########################")
+	lgr.Println("### TestEmptyPutThrice ###")
+	lgr.Println("##########################")
+
 	var keys = [][]byte{[]byte("foo"), []byte("bar"), []byte("baz")}
 	var vals = []int{1, 2, 3}
 
-	var h = EMPTY
+	var h *Hamt = &EMPTY
 
 	for i := range keys {
 		t.Logf("for i=%d calling h.Put(\"%s\", %d)\n", i, keys[i], vals[i])
 		h, _ = h.Put(keys[i], vals[i])
-		t.Log("h = ", h)
+		t.Logf("after i=%d calling h.Put(\"%s\", %d) h=\n%s", i, keys[i], vals[i], h)
 	}
 
 	t.Logf("h=\n%s", h.String())
-	//	t.Logf("h.root=\n%s", h.root.String())
 
 	for i := range vals {
 		t.Logf("for i=%d calling h.Get(\"%s\")", i, keys[i])
@@ -86,4 +108,22 @@ func TestEmptyPutThrice(t *testing.T) {
 			t.Fatalf("failed to get val for \"%s\" val,%d != vals[%d],%d from h", keys[i], val, i, vals[i])
 		}
 	}
+}
+
+func TestEmptyPutMany(t *testing.T) {
+	lgr.Println("########################")
+	lgr.Println("### TestEmptyPutMany ###")
+	lgr.Println("########################")
+
+	var h = &EMPTY
+
+	lgr.Println(midNumEnts)
+
+	for i := 0; i < 64; i++ {
+		var key = midNumEnts[i].key
+		var val = midNumEnts[i].val
+		h, _ = h.Put(key, val)
+	}
+
+	t.Log("h = ", h)
 }
