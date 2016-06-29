@@ -272,7 +272,13 @@ func (h Hamt) Put(key []byte, val interface{}) (newHamt *Hamt, inserted bool) {
 		 **********************************/
 		if oldLeaf, ok := curNode.(leafI); ok {
 
-			lgr.Println("Hamt.Put(\"%s\", %v) collided with leaf at depth=%d", key, val, depth)
+			lgr.Printf("Hamt.Put(\"%s\", %v) collided with leaf at depth=%d", key, val, depth)
+
+			if fl, ok := oldLeaf.(flatLeaf); ok {
+				lgr.Printf("---> old collided leaf ISA flatLeaf: %s", fl)
+			} else if cl, ok := oldLeaf.(collisionLeaf); ok {
+				lgr.Printf("---> old collided leaf ISA collisionLeaf: %s", cl)
+			}
 
 			/**************************************************************
 			 * ...AND hashcode COLLISION. Either we are part of
@@ -774,8 +780,8 @@ func (l collisionLeaf) String() string {
 	for i := 0; i < len(l.kvs); i++ {
 		kvstrs[i] = l.kvs[i].String()
 	}
-	var kvstr = strings.Join(kvstrs, ",")
-	return fmt.Sprintf("{hash60:%016x, kvs:[]kv{%s}}", l.hash60, kvstr)
+	var jkvstr = strings.Join(kvstrs, ",")
+	return fmt.Sprintf("{hash60:%016x, kvs:[]kv{%s}}", l.hash60, jkvstr)
 }
 
 func (l collisionLeaf) get(key []byte) (interface{}, bool) {
