@@ -80,7 +80,7 @@ func makeHashPath(depth uint, hash uint64) uint64 {
 }
 
 func hashPathMask(depth uint) uint64 {
-	return uint64(1<<(depth*NBITS)) - 1
+	return uint64(1<<((depth+1)*NBITS)) - 1
 }
 
 func hashPathString(hashPath uint64, depth uint) string {
@@ -132,7 +132,8 @@ func index(hash60 uint64, depth uint) uint {
 
 //buildHashPath()
 func buildHashPath(hashPath uint64, depth, idx uint) uint64 {
-	if (hashPath&(1<<(depth*NBITS)) - 1) > 0 {
+	hashPathMask_ := hashPathMask(depth)
+	if ((hashPath & hashPathMask_) - 1) > 0 {
 		panic("hashPath > depth")
 	}
 
@@ -162,15 +163,19 @@ func (h Hamt) copy() *Hamt {
 }
 
 func (h *Hamt) copyUp(oldTable, newTable tableI, path pathT) {
+	lgr.Println("!!! --- h.copyUp(oldTable, newTable, path) --- !!!")
 	if path.isEmpty() {
 		if h.root != oldTable {
 			panic("WTF! path.isEmpty() and h.root != oldTable")
 		}
+		lgr.Printf("h.root = \n%s", h.root)
 		h.root = newTable
 		return
 	}
 
 	oldParent := path.pop()
+
+	lgr.Printf("oldParent = \n%s", oldParent)
 
 	//newParent := oldParent.replace(oldNode, newNode)
 	newParent := oldParent.set(oldTable.hashcode(), newTable)
@@ -272,7 +277,7 @@ func (h Hamt) Put(key []byte, val interface{}) (newHamt *Hamt, inserted bool) {
 		 **********************************/
 		if oldLeaf, ok := curNode.(leafI); ok {
 
-			lgr.Printf("Hamt.Put(\"%s\", %v) collided with leaf at depth=%d", key, val, depth)
+			lgr.Printf("Hamt.Put(\"%s\", %v) COLLIDED with leaf at depth=%d", key, val, depth)
 
 			if fl, ok := oldLeaf.(flatLeaf); ok {
 				lgr.Printf("---> old collided leaf ISA flatLeaf: %s", fl)
@@ -285,13 +290,20 @@ func (h Hamt) Put(key []byte, val interface{}) (newHamt *Hamt, inserted bool) {
 			 * the way down to MAXDEPTH and part of the hashcode matches,
 			 * or we are at MAXDEPTH and 60 of 64 bits match.
 			 **************************************************************/
+			lgr.Printf("oldLeaf.hashcode() as hashPath = %s", hashPathString(oldLeaf.hashcode(), MAXDEPTH))
+			lgr.Printf("hash60             as hashPath = %s", hashPathString(hash60, MAXDEPTH))
+			//lgr.Printf("oldLeaf.hashcode() = 0x%016x", oldLeaf.hashcode())
+			//lgr.Printf("hash60             = 0x%016x", hash60)
 			if hash60Equal(oldLeaf.hashcode(), hash60) {
+				lgr.Printf("HOLY SHIT!!! Two keys collided with this same hash60 orig key=\"%s\" new key=\"%s\" hash60=0x%016x", oldLeaf.(flatLeaf).key, key, hash60)
 				//if oldLeaf is a flatLeaf this will promote it to a
 				// collisionLeaf, else it already is a collisionLeaf.
-				path.push(curTable)
+
 				var newLeaf leafI
 				newLeaf, inserted = oldLeaf.put(key, val)
-				newHamt.copyUpLeaf(oldLeaf, newLeaf, path)
+				var newTable = curTable.set(oldLeaf.hashcode(), newLeaf)
+				newHamt.copyUp(curTable, newTable, path)
+
 				return
 			}
 
@@ -300,11 +312,21 @@ func (h Hamt) Put(key []byte, val interface{}) (newHamt *Hamt, inserted bool) {
 			// Two leafs into one slot requires a new Table with those two leafs
 			// to be put into that slot.
 			var hashPath = hash60 & hashPathMask(depth)
+			//lgr.Printf("hashPath = 0x%016x", hashPath)
+			lgr.Printf("hashPath = %s", hashPathString(hashPath, depth))
+			lgr.Printf("hashPathMask(depth=%d) = 0b%064b", depth, hashPathMask(depth))
+
+			lgr.Println("Creating compressedTable w/ oldLeaf and newLeaf.")
 
 			// Table from the collision of two leaves
-			colTable := NewCompressedTable2(depth, hashPath, oldLeaf, newLeaf)
+			colTable := NewCompressedTable2(depth+1, hashPath, oldLeaf, newLeaf)
+
+			lgr.Printf("   colTable = \n%s", colTable.String())
 
 			newTable := curTable.set(hash60, colTable)
+
+			lgr.Printf("curTable = \n%s", curTable)
+			lgr.Printf("newTable = \n%s", newTable)
 
 			newHamt.copyUp(curTable, newTable, path)
 			return
@@ -349,7 +371,7 @@ type nodeI interface {
 	hashcode() uint64
 	copy() nodeI
 	String() string
-	//ShortString() string
+	ShortString() string
 }
 
 // Every tableI is a nodeI.
@@ -417,6 +439,10 @@ func NewCompressedTable(depth uint, hashPath uint64, lf leafI) tableI {
 
 func NewCompressedTable2(depth uint, hashPath uint64, leaf1 leafI, leaf2 flatLeaf) tableI {
 	ASSERT(depth < MAXDEPTH+1, "uint parameter 0 >= depth >= 9")
+	lgr.Printf("!!! --- NewCompressedTable2(depth, hashPath, leaf1, leaf2) --- !!!")
+	lgr.Printf("NewCompressedTable2: depth=%d; hashPath=0x%016x;", depth, hashPath)
+	lgr.Printf("NewCompressedTable2: leaf1=%s", leaf1)
+	lgr.Printf("NewCompressedTable2: leaf2=%s", leaf2)
 
 	var retTable = new(compressedTable) // return compressedTable
 	retTable.hashPath = hashPath
@@ -427,11 +453,13 @@ func NewCompressedTable2(depth uint, hashPath uint64, leaf1 leafI, leaf2 flatLea
 	for d = depth; d < MAXDEPTH; d++ {
 		var idx1 = index(leaf1.hashcode(), d)
 		var idx2 = index(leaf2.hashcode(), d)
-		curTable.nodes = make([]nodeI, 2)
 
 		if idx1 != idx2 {
-			curTable.nodeMap &= 1 << idx1
-			curTable.nodeMap &= 1 << idx2
+			lgr.Printf("NewCompressedTable2: d=%d; idx1,%d != idx2,%d", d, idx1, idx2)
+			curTable.nodes = make([]nodeI, 2)
+
+			curTable.nodeMap |= 1 << idx1
+			curTable.nodeMap |= 1 << idx2
 			if idx1 < idx2 {
 				curTable.nodes[0] = leaf1
 				curTable.nodes[1] = leaf2
@@ -440,8 +468,13 @@ func NewCompressedTable2(depth uint, hashPath uint64, leaf1 leafI, leaf2 flatLea
 				curTable.nodes[1] = leaf1
 			}
 
+			lgr.Println("NewCompressedTable2: break loop.")
 			break
 		}
+
+		lgr.Printf("NewCompressedTable2: LOOPING! d=%d; idx1,%d == idx2,%d", d, idx1, idx2)
+
+		curTable.nodes = make([]nodeI, 1)
 
 		// idx1 == idx2 && continue
 		var newTable = new(compressedTable)
@@ -449,17 +482,22 @@ func NewCompressedTable2(depth uint, hashPath uint64, leaf1 leafI, leaf2 flatLea
 		newTable.hashPath = hashPath & uint64(idx1<<((d+1)*NBITS))
 		newTable.depth = d + 1
 
-		curTable.nodeMap = 1 << idx1
-		curTable.nodes = append(curTable.nodes, newTable)
+		curTable.nodeMap = 1 << idx1 //Set the idx1'th bit
+		curTable.nodes[0] = newTable
 
 		curTable = newTable
 	}
+	// We either BREAK out of the loop,
+	// OR we hit d = MAXDEPTH.
+	lgr.Println("NewCompressedTable2: finished loop.")
 	if d == MAXDEPTH {
+		lgr.Println("NewCompressedTable2: d,%d == MAXDEPTH,%d", d, MAXDEPTH)
 		// leaf1.hashcode() == leaf2.hashcode()
 		leaf, _ := leaf1.put(leaf2.key, leaf2.val)
 		curTable.set(leaf.hashcode(), leaf)
 	}
 
+	lgr.Printf("NewCompressedTable2: returning retTable =\n%s", retTable)
 	return retTable
 }
 
@@ -478,7 +516,8 @@ func (t compressedTable) copy() nodeI {
 
 func (t compressedTable) ShortString() string {
 	// compressedTale(depth=%d; hashPath=[%d,%d,%d]; nentries=%d; flatLeaf{"foo",1},flatLeaf{"bar",2},TABLE)
-	return "NOT IMPLEMENTED"
+	return fmt.Sprintf("compressedTable{depth:%d, hashPath:%s, nentries()=%d}",
+		t.depth, hashPathString(t.hashPath, t.depth), t.nentries())
 }
 
 func (t compressedTable) String() string {
@@ -494,7 +533,7 @@ func (t compressedTable) String() string {
 	// for each node in nodes
 	//     String node
 	for i, n := range t.nodes {
-		strs[2+i] = fmt.Sprintf("t.nodes[%d]: %s", i, n.String())
+		strs[2+i] = fmt.Sprintf("t.nodes[%d]: %s", i, n.ShortString())
 	}
 
 	return strings.Join(strs, "\n")
@@ -544,6 +583,7 @@ func (t compressedTable) get(hash60 uint64) nodeI {
 }
 
 func (t compressedTable) set(hash60 uint64, newNode nodeI) tableI {
+	lgr.Printf("!!! --- t.set(hash60, newNode) --- !!!")
 	var nt = t.copy().(*compressedTable)
 
 	// Get the regular index of the node we want to access
@@ -632,7 +672,12 @@ func (t fullTable) copy() nodeI {
 
 // String() is require for nodeI
 func (t fullTable) String() string {
-	return "NOT IMPLEMENTED"
+	return "fullTable.String: NOT IMPLEMENTED"
+}
+
+// ShortString() is required for nodeI
+func (t fullTable) ShortString() string {
+	return "fullTable.ShortString: NOT IMPLEMENTED"
 }
 
 // nentries() is required for tableI
@@ -701,7 +746,7 @@ func (l flatLeaf) copy() nodeI {
 }
 
 func (l flatLeaf) ShortString() string {
-	return "NOT IMPLEMENTED"
+	return l.String()
 }
 
 func (l flatLeaf) String() string {
@@ -772,7 +817,7 @@ func (l collisionLeaf) copy() nodeI {
 }
 
 func (l collisionLeaf) ShortString() string {
-	return "NOT IMPLEMENTED"
+	return "collisionLeaf.ShortString: NOT IMPLEMENTED"
 }
 
 func (l collisionLeaf) String() string {
