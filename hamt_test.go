@@ -59,7 +59,7 @@ func TestMain(m *testing.M) {
 	os.Exit(xit)
 }
 
-func TestEmptyPutOnce(t *testing.T) {
+func tTestEmptyPutOnce(t *testing.T) {
 	lgr.Println("########################")
 	lgr.Println("### TestEmptyPutOnce ###")
 	lgr.Println("########################")
@@ -79,7 +79,7 @@ func TestEmptyPutOnce(t *testing.T) {
 	}
 }
 
-func TestEmptyPutThrice(t *testing.T) {
+func tTestEmptyPutThrice(t *testing.T) {
 	lgr.Println("##########################")
 	lgr.Println("### TestEmptyPutThrice ###")
 	lgr.Println("##########################")
@@ -110,7 +110,18 @@ func TestEmptyPutThrice(t *testing.T) {
 	}
 }
 
-func TestEmptyPutMany(t *testing.T) {
+// "d":4 && "aa":27
+func tTestTwoTableDeepCollision(t *testing.T) {
+	var h = &EMPTY
+
+	h, _ = h.Put([]byte("d"), 4)
+	h, _ = h.Put([]byte("aa"), 27)
+	lgr.Printf("h.root = %s", h.root.LongString(""))
+
+	return
+}
+
+func TestEmptyPutManyGetMany(t *testing.T) {
 	lgr.Println("########################")
 	lgr.Println("### TestEmptyPutMany ###")
 	lgr.Println("########################")
@@ -126,4 +137,17 @@ func TestEmptyPutMany(t *testing.T) {
 	}
 
 	t.Log("h = ", h)
+
+	for i := 0; i < 64; i++ {
+		var key = midNumEnts[i].key
+		var expected_val = midNumEnts[i].val
+
+		var val, found = h.Get(key)
+		if !found {
+			t.Errorf("Did NOT find val for key=\"%s\"", key)
+		}
+		if val != expected_val {
+			t.Errorf("val,%d != expected_val,%d", val, expected_val)
+		}
+	}
 }
