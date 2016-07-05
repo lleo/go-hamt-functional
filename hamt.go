@@ -170,17 +170,10 @@ func (h Hamt) copy() *Hamt {
 }
 
 func (h *Hamt) copyUp(oldTable, newTable tableI, path pathT) {
-	lgr.Println("!!! --- h.copyUp(oldTable, newTable, path) --- !!!")
 	if path.isEmpty() {
 		if h.root != oldTable {
 			panic("WTF! path.isEmpty() and h.root != oldTable")
 		}
-		if newTable == nil {
-			panic("copyUp: newTable == nil")
-		}
-
-		lgr.Println("Hamt h = ", h)
-		lgr.Printf("newTable =\n%s", newTable.LongString(""))
 
 		h.root = newTable
 		return
@@ -188,26 +181,11 @@ func (h *Hamt) copyUp(oldTable, newTable tableI, path pathT) {
 
 	oldParent := path.pop()
 
-	lgr.Printf("oldParent = \n%s", oldParent)
-
-	//newParent := oldParent.replace(oldNode, newNode)
 	newParent := oldParent.set(oldTable.hashcode(), newTable)
 
 	h.copyUp(oldParent, newParent, path)
 	return
 }
-
-//func (h *Hamt) copyUpLeaf(oldLeaf, newLeaf leafI, path pathT) {
-//	if path.isEmpty() {
-//		panic("copyUpLeaf() call where path.isEmpty()")
-//	}
-//
-//	var oldTable = path.pop()
-//	var newTable = oldTable.set(oldLeaf.hashcode(), newLeaf)
-//
-//	h.copyUp(oldTable, newTable, path)
-//	return
-//}
 
 // Get(key) retrieves the value for a given key from the Hamt. The bool
 // represents whether the key was found.
@@ -216,20 +194,13 @@ func (h Hamt) Get(key []byte) (interface{}, bool) {
 		return nil, false
 	}
 
-	//lgr.Println("h = ", h)
-
 	var hash = hash64(key)
 	var hash60 = hash & sixtyBitMask
-
-	//lgr.Printf("Hamt.Get(): key    = %s", key)
-	//lgr.Printf("Hamt.Get(): hash60 = 0x%016x", hash60)
 
 	// We know h.root != nil (above IsEmpty test) and h.root is a tableI
 	// intrface compliant struct.
 	var curTable = h.root
 	var curNode = curTable.get(hash60)
-
-	//lgr.Printf("curNode = %v", curNode)
 
 	for depth := uint(0); curNode != nil && depth <= MAXDEPTH; depth++ {
 		//if curNode ISA leafI
@@ -253,7 +224,7 @@ func (h Hamt) Get(key []byte) (interface{}, bool) {
 func (h Hamt) Put(key []byte, val interface{}) (newHamt *Hamt, inserted bool) {
 	//newHamt = Hamt{nil, 0} //always creating a new Hamt
 	newHamt = h.copy()
-	inserted = true //true == inserted key/val pair; false == replaced val
+	//inserted = true //true == inserted key/val pair; false == replaced val
 
 	var hash60 = hash64(key) & sixtyBitMask
 	var depth uint
@@ -265,8 +236,7 @@ func (h Hamt) Put(key []byte, val interface{}) (newHamt *Hamt, inserted bool) {
 	if h.IsEmpty() {
 		newHamt.root = NewCompressedTable(depth, hash60, newLeaf)
 		newHamt.nentries++
-		lgr.Printf("t.root==nil Hamt.Put(\"%s\", %v) depth=%d nentries=%d root=%s", key, val, depth, newHamt.nentries, newHamt.root)
-		return
+		return newHamt, true
 	}
 
 	var path = newPathT()
@@ -281,25 +251,15 @@ func (h Hamt) Put(key []byte, val interface{}) (newHamt *Hamt, inserted bool) {
 		 ***********************************************/
 		if curNode == nil {
 			var newTable = curTable.set(hash60, newLeaf)
-			lgr.Printf("###>>> curNode==nil; newTable = curTable.set(hash60, newLeaf) = %s", newTable)
-			lgr.Printf("###>>> curNode==nil; Hamt.Put(\"%s\", %v): newTable=%s", key, val, newTable)
 			newHamt.nentries++
 			newHamt.copyUp(curTable, newTable, path)
-			return
+			return newHamt, true
 		}
 
 		/**********************************
 		 * If the table entry ISA leaf... *
 		 **********************************/
 		if oldLeaf, ok := curNode.(leafI); ok {
-
-			lgr.Printf("###>>> curNode.(leafI) Hamt.Put(\"%s\", %v) COLLIDED with leaf at depth=%d", key, val, depth)
-
-			if fl, ok := oldLeaf.(flatLeaf); ok {
-				lgr.Printf("---> old collided leaf ISA flatLeaf: %s", fl)
-			} else if cl, ok := oldLeaf.(collisionLeaf); ok {
-				lgr.Printf("---> old collided leaf ISA collisionLeaf: %s", cl)
-			}
 
 			/**************************************************************
 			 * ...AND hashcode COLLISION. Either we are part of
@@ -327,30 +287,17 @@ func (h Hamt) Put(key []byte, val interface{}) (newHamt *Hamt, inserted bool) {
 			// Two leafs into one slot requires a new Table with those two leafs
 			// to be put into that slot.
 			var hashPath = hash60 & hashPathMask(depth)
-			//lgr.Printf("hashPath = 0x%016x", hashPath)
-			lgr.Printf("hashPath = %s", hashPathString(hashPath, depth))
-			lgr.Printf("hashPathMask(depth=%d) = 0b%064b", depth, hashPathMask(depth))
-
-			lgr.Println("Creating compressedTable w/ oldLeaf and newLeaf.")
 
 			// Table from the collision of two leaves
 			collisionTable := NewCompressedTable2(depth+1, hashPath, oldLeaf, *newLeaf)
 
-			lgr.Printf("   collisionTable = \n%s", collisionTable.String())
-
 			newTable := curTable.set(hash60, collisionTable)
-
-			lgr.Printf("curTable = \n%s", curTable)
-			lgr.Printf("newTable = \n%s", newTable)
 
 			newHamt.nentries++
 			newHamt.copyUp(curTable, newTable, path)
-			return
+			return newHamt, true
 		}
 
-		lgr.Println("###>>> curNode ISA TABLE Hamt.Put(\"%s\", %v) GOING DOWN TABLE AT depth=%d", key, val, depth)
-
-		lgr.Println("############ path.push(curTable) ############")
 		path.push(curTable)
 
 		/***********************************
@@ -458,11 +405,6 @@ func NewCompressedTable2(depth uint, hashPath uint64, leaf1 leafI, leaf2 flatLea
 
 	hashPath = leaf1.hashcode() & hashPathMask(depth)
 
-	//lgr.Printf("!!! --- NewCompressedTable2(depth, hashPath, leaf1, leaf2) --- !!!")
-	//lgr.Printf("NewCompressedTable2: depth=%d; hashPath=%s;", depth, hash60String(hashPath))
-	//lgr.Printf("NewCompressedTable2: leaf1=%s", leaf1)
-	//lgr.Printf("NewCompressedTable2: leaf2=%s", leaf2)
-
 	var retTable = new(compressedTable) // return compressedTable
 	retTable.hashPath = hashPath & hashPathMask(depth)
 	retTable.depth = depth
@@ -474,7 +416,6 @@ func NewCompressedTable2(depth uint, hashPath uint64, leaf1 leafI, leaf2 flatLea
 		var idx2 = index(leaf2.hashcode(), d)
 
 		if idx1 != idx2 {
-			//lgr.Printf("NewCompressedTable2: d=%d; idx1,%d != idx2,%d", d, idx1, idx2)
 			curTable.nodes = make([]nodeI, 2)
 
 			curTable.nodeMap |= 1 << idx1
@@ -487,19 +428,15 @@ func NewCompressedTable2(depth uint, hashPath uint64, leaf1 leafI, leaf2 flatLea
 				curTable.nodes[1] = leaf1
 			}
 
-			//lgr.Println("NewCompressedTable2: break loop.")
-
 			break
 		}
-
-		//lgr.Printf("NewCompressedTable2: LOOPING! d=%d; idx1,%d == idx2,%d", d, idx1, idx2)
+		// idx1 == idx2 && continue
 
 		curTable.nodes = make([]nodeI, 1)
 
-		// idx1 == idx2 && continue
 		var newTable = new(compressedTable)
-		//newTable.hashPath = buildHashPath(hashPath, d+1, idx1)
 
+		//newTable.hashPath = buildHashPath(hashPath, d+1, idx1)
 		newTable.hashPath = hashPath | uint64(idx1<<(d*NBITS))
 		newTable.depth = d + 1
 
@@ -511,13 +448,10 @@ func NewCompressedTable2(depth uint, hashPath uint64, leaf1 leafI, leaf2 flatLea
 	// We either BREAK out of the loop,
 	// OR we hit d = MAXDEPTH.
 	if d == MAXDEPTH {
-		lgr.Println("NewCompressedTable2: d,%d == MAXDEPTH,%d", d, MAXDEPTH)
 		// leaf1.hashcode() == leaf2.hashcode()
 		leaf, _ := leaf1.put(leaf2.key, leaf2.val)
 		curTable.set(leaf.hashcode(), leaf)
 	}
-
-	//lgr.Printf("NewCompressedTable2: returning retTable = %s", retTable)
 
 	return retTable
 }
@@ -571,42 +505,26 @@ func (t compressedTable) nentries() uint {
 
 func (t compressedTable) entries() []tableEntry {
 	var n = t.nentries()
-	//lgr.Printf("n=%d", n)
-
 	var ents = make([]tableEntry, n)
-	//	for i, j := uint(0), 0; i < TABLE_CAPACITY; i, j = i+1, j+1 {
+
 	for i, j := uint(0), uint(0); i < TABLE_CAPACITY; i++ {
-		//lgr.Printf("%d < %d", i, TABLE_CAPACITY)
-
 		var nodeBit = uint64(1 << i)
+
 		if (t.nodeMap & nodeBit) > 0 {
-			//lgr.Printf("j=%d", j)
-			//lgr.Printf("nodeMap = %s", nodeMapString(t.nodeMap))
-			//lgr.Printf("nodeBit = %s", nodeMapString(nodeBit))
-
-			//ents[j] = tableEntry{j, t.nodes[j]}
-
-			newEnt := tableEntry{i, t.nodes[j]}
-			ents[j] = newEnt
-
+			ents[j] = tableEntry{i, t.nodes[j]}
 			j++
 		}
 	}
-	//lgr.Println("after for-loop")
+
 	return ents
 }
 
-func (t compressedTable) get(hash60 uint64) nodeI {
+func (t compressedTable) get(hashPath uint64) nodeI {
 	// Get the regular index of the node we want to access
-	var idx = index(hash60, t.depth) // 0..63
+	var idx = index(hashPath, t.depth) // 0..63
 	var nodeBit = uint64(1 << idx)
 
-	//lgr.Printf("compressedTable.get(hash60 = 0x%016x)", hash60)
-	//lgr.Printf("compressedTable.get: t.nodeMap = 0b%064b", t.nodeMap)
-	//lgr.Printf("compressedTable.get: nodeBit   = 0b%064b", nodeBit)
-
 	if (t.nodeMap & nodeBit) == 0 {
-		//lgr.Println("compressedTable.get: t.nodeMap & nodeBit == 0")
 		return nil
 	}
 
@@ -621,53 +539,36 @@ func (t compressedTable) get(hash60 uint64) nodeI {
 	return node
 }
 
-func (t compressedTable) set(hash60 uint64, newNode nodeI) tableI {
-	lgr.Printf("!!! --- t.set(hash60, newNode) --- !!!")
+func (t compressedTable) set(hashPath uint64, newNode nodeI) tableI {
 	var nt = t.copy()
 
 	// Get the regular index of the node we want to access
-	var idx = index(hash60, t.depth) // 0..63
-	var nodeBit = uint64(1 << idx)   //is the slot
+	var idx = index(hashPath, t.depth) // 0..63
+	var nodeBit = uint64(1 << idx)     // idx is the slot
+	var bitMask = nodeBit - 1          // mask all bits below the idx'th bit
 
-	var bitMask = uint64(1<<idx) - 1
-
+	// Calculate the index into compressedTable.nodes[] for this entry
 	var i = BitCount64(t.nodeMap & bitMask)
 
-	//lgr.Printf("compressedTable.set(hash60 = 0x%016x, newNode)", hash60)
-	//lgr.Printf("compressedTable.set: t.nodeMap     = 0b%064b", t.nodeMap)
-	//lgr.Printf("compressedTable.set: nodeBit       = 0b%064b", nodeBit)
-	//lgr.Printf("compressedTable.set: len(nt.nodes) = %d", len(nt.nodes))
-
+	// Adding newNode to compressedTable
+	//
 	if (t.nodeMap & nodeBit) == 0 {
 		// slot is empty, so reserve that nodeBit in the nt.nodeMap
 		nt.nodeMap |= nodeBit
 
-		//insert newnode into the i'th spot of t.nodes
+		// insert newnode into the i'th spot of nt.nodes[]
 		nt.nodes = append(nt.nodes[:i], append([]nodeI{newNode}, nt.nodes[i:]...)...)
 
-		//lgr.Printf("compressedTable.set: nt.nodeMap    = 0b%064b", nt.nodeMap)
-		//lgr.Printf("compressedTable.set: nodeBit       = 0b%064b", nodeBit)
-		//lgr.Printf("compressedTable.set: len(nt.nodes) = %d", len(nt.nodes))
-
-		lgr.Printf("IS BitCount64(nt.nodeMap),%d >= TABLE_CAPACITY/2,%d", BitCount64(nt.nodeMap), TABLE_CAPACITY/2)
 		if BitCount64(nt.nodeMap) >= TABLE_CAPACITY/2 {
-			//promote compressedTable to fullTable
-			lgr.Println("!!! PROMOTE compressedTable TO fullTable")
-			var ents = nt.entries()
-			lgr.Println("after nt.entries()")
-			newTable := NewFullTable(nt.depth, nt.hashPath, ents)
-
-			lgr.Printf("compressedTable.set(hash60, node) promoting table to fullTable = %s", newTable)
-
-			return newTable
+			// promote compressedTable to fullTable
+			return NewFullTable(nt.depth, nt.hashPath, nt.entries())
 		}
-		lgr.Println("NOPE just return compressedTable")
+
+		// Just return the new compressedTable
 		return nt
 	}
 
 	// slot is used
-	//
-	//var oldNode = t.nodes[i]
 
 	nt.nodes[i] = newNode
 
@@ -769,8 +670,8 @@ func (t fullTable) entries() []tableEntry {
 }
 
 // get(uint64) is required for tableI
-func (t fullTable) get(hash60 uint64) nodeI {
-	var idx = index(hash60, t.depth)
+func (t fullTable) get(hashPath uint64) nodeI {
+	var idx = index(hashPath, t.depth)
 	var nodeBit = uint64(1 << idx)
 
 	if (t.nodeMap & nodeBit) == 0 {
@@ -783,14 +684,10 @@ func (t fullTable) get(hash60 uint64) nodeI {
 }
 
 // set(uint64, nodeI) is required for tableI
-func (t fullTable) set(hash60 uint64, node nodeI) tableI {
-	lgr.Printf("fullTable.set(hash60, node)")
-	lgr.Printf("\thash60 = %s", hash60String(hash60))
-	lgr.Printf("\tnode   = %s", node)
-
+func (t fullTable) set(hashPath uint64, node nodeI) tableI {
 	var nt = t.copy()
 
-	var idx = index(hash60, nt.depth)
+	var idx = index(hashPath, nt.depth)
 	var nodeBit = uint64(1 << idx)
 
 	nt.nodeMap |= nodeBit
