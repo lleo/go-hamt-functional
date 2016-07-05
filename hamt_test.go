@@ -82,17 +82,14 @@ func TestEmptyPutThriceGetThrice(t *testing.T) {
 	var h *Hamt = &EMPTY
 
 	for i := range keys {
-		t.Logf("for i=%d calling h.Put(\"%s\", %d)\n", i, keys[i], vals[i])
 		h, _ = h.Put(keys[i], vals[i])
-		t.Logf("after i=%d calling h.Put(\"%s\", %d) h=\n%s", i, keys[i], vals[i], h)
 	}
 
-	t.Logf("h=\n%s", h.String())
+	t.Logf("h.root =\n%s", h.root.LongString(""))
 
 	for i := range vals {
-		t.Logf("for i=%d calling h.Get(\"%s\")", i, keys[i])
 		var val, found = h.Get(keys[i])
-		t.Logf("val = %v, found = %v\n", val, found)
+
 		if !found {
 			t.Fatalf("failed to get key \"%s\" from h", keys[i])
 		}
@@ -108,7 +105,8 @@ func TestPutGetTwoTableDeepCollision(t *testing.T) {
 
 	h, _ = h.Put([]byte("d"), 4)
 	h, _ = h.Put([]byte("aa"), 27)
-	t.Logf("h.root = %s", h.root.LongString(""))
+
+	t.Log("h.root =\n%s", h.root.LongString(""))
 
 	var val interface{}
 	var found bool
@@ -141,7 +139,7 @@ func TestEmptyPutManyGetMany(t *testing.T) {
 		h, _ = h.Put(key, val)
 	}
 
-	t.Log("h = ", h)
+	t.Log("h.root =\n", h.root.LongString(""))
 
 	for i := 0; i < 64; i++ {
 		var key = midNumEnts[i].key
