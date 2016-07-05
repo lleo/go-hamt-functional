@@ -48,7 +48,7 @@ const sixtyBitMask = 1<<60 - 1
 // total and cunsumes 60 of the 64 bit hashcode.
 const MAXDEPTH uint = 9
 
-const ASSERT_CONST bool = true
+const ASSERT_CONST bool = false
 
 func ASSERT(test bool, msg string) {
 	if ASSERT_CONST {
@@ -311,6 +311,7 @@ func (h Hamt) Put(key []byte, val interface{}) (newHamt *Hamt, inserted bool) {
 }
 
 func (h Hamt) Del(key []byte) (Hamt, interface{}, bool) {
+
 	return Hamt{nil, 0}, nil, false
 }
 
@@ -386,7 +387,7 @@ type tableEntry struct {
 }
 
 func NewCompressedTable(depth uint, hash60 uint64, lf leafI) tableI {
-	ASSERT(depth < MAXDEPTH+1, "uint parameter 0 >= depth >= 9")
+	//ASSERT(depth < MAXDEPTH+1, "uint parameter 0 >= depth >= 9")
 
 	var idx = index(lf.hashcode(), depth)
 
@@ -401,7 +402,7 @@ func NewCompressedTable(depth uint, hash60 uint64, lf leafI) tableI {
 }
 
 func NewCompressedTable2(depth uint, hashPath uint64, leaf1 leafI, leaf2 flatLeaf) tableI {
-	ASSERT(depth < MAXDEPTH+1, "uint parameter 0 >= depth >= 9")
+	//ASSERT(depth < MAXDEPTH+1, "uint parameter 0 >= depth >= 9")
 
 	hashPath = leaf1.hashcode() & hashPathMask(depth)
 
