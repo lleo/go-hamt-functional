@@ -59,11 +59,7 @@ func TestMain(m *testing.M) {
 	os.Exit(xit)
 }
 
-func tTestEmptyPutOnce(t *testing.T) {
-	lgr.Println("########################")
-	lgr.Println("### TestEmptyPutOnce ###")
-	lgr.Println("########################")
-
+func TestEmptyPutOnceGetOnce(t *testing.T) {
 	key := []byte("foo")
 
 	h, _ := EMPTY.Put(key, 1)
@@ -79,11 +75,7 @@ func tTestEmptyPutOnce(t *testing.T) {
 	}
 }
 
-func tTestEmptyPutThrice(t *testing.T) {
-	lgr.Println("##########################")
-	lgr.Println("### TestEmptyPutThrice ###")
-	lgr.Println("##########################")
-
+func TestEmptyPutThriceGetThrice(t *testing.T) {
 	var keys = [][]byte{[]byte("foo"), []byte("bar"), []byte("baz")}
 	var vals = []int{1, 2, 3}
 
@@ -110,25 +102,38 @@ func tTestEmptyPutThrice(t *testing.T) {
 	}
 }
 
-// "d":4 && "aa":27
-func tTestTwoTableDeepCollision(t *testing.T) {
+// "d":4 && "aa":27 collide at depth 0 & 1
+func TestPutGetTwoTableDeepCollision(t *testing.T) {
 	var h = &EMPTY
 
 	h, _ = h.Put([]byte("d"), 4)
 	h, _ = h.Put([]byte("aa"), 27)
-	lgr.Printf("h.root = %s", h.root.LongString(""))
+	t.Logf("h.root = %s", h.root.LongString(""))
+
+	var val interface{}
+	var found bool
+	val, found = h.Get([]byte("d"))
+	if !found {
+		t.Error("failed to find val for key=\"d\"")
+	}
+	if val != 4 {
+		t.Error("h.Get(\"d\") failed to retrieve val = 4")
+	}
+
+	val, found = h.Get([]byte("aa"))
+	if !found {
+		t.Error("failed to find val for key=\"aa\"")
+	}
+	if val != 27 {
+		t.Error("h.Get(\"d\") failed to retrieve val = 27")
+	}
 
 	return
 }
 
+// Where Many == 64
 func TestEmptyPutManyGetMany(t *testing.T) {
-	lgr.Println("########################")
-	lgr.Println("### TestEmptyPutMany ###")
-	lgr.Println("########################")
-
 	var h = &EMPTY
-
-	lgr.Println(midNumEnts)
 
 	for i := 0; i < 64; i++ {
 		var key = midNumEnts[i].key
