@@ -124,25 +124,29 @@ func hash60Equal(a, b uint64) bool {
 	return (a & sixtyBitMask) == (b & sixtyBitMask)
 }
 
-//idxMask() generates a NBITS(6-bit) mask for a given depth
-func idxMask(depth uint) uint64 {
-	var m = uint64(uint8(1<<NBITS) - 1)
-	return m << (depth * NBITS)
+//indexMask() generates a NBITS(6-bit) mask for a given depth
+func indexMask(depth uint) uint64 {
+	//var eightBitMask = uint64(uint8(1<<NBITS) - 1)
+	//return eightBitMask << (depth * NBITS)
+	return uint64(uint8(1<<NBITS)-1) << (depth * NBITS)
 }
 
 //index() calculates a NBITS(6-bit) integer based on the hash and depth
 func index(hash60 uint64, depth uint) uint {
-	var m = idxMask(depth)
-	var idx = uint((hash60 & m) >> (depth * NBITS))
+	var idxMask = indexMask(depth)
+	var idx = uint((hash60 & idxMask) >> (depth * NBITS))
 	return idx
 }
 
 //buildHashPath()
 func buildHashPath(hashPath uint64, depth, idx uint) uint64 {
-	hashPathMask_ := hashPathMask(depth)
-	if ((hashPath & hashPathMask_) - 1) > 0 {
-		panic("hashPath > depth")
-	}
+	// This code is not valid where idx == 0 for each depth
+	/*
+		hashPathMask_ := hashPathMask(depth)
+		if ((hashPath & hashPathMask_) - 1) > 0 {
+			panic("hashPath > depth")
+		}
+	*/
 
 	return hashPath & uint64(idx<<(depth*NBITS))
 }
@@ -158,6 +162,19 @@ func (h Hamt) String() string {
 	return fmt.Sprintf("Hamt{ nentries: %d, root: %s }", h.nentries, h.root)
 }
 
+func (h Hamt) LongString(indent string) string {
+	var str string
+	if h.root != nil {
+		str = indent + fmt.Sprintf("Hamt{ nentries: %d,\n", h.nentries)
+		str += indent + h.root.LongString(indent)
+		str += indent + "}"
+		return str
+	} else {
+		str = indent + fmt.Sprintf("Hamt{ nentries: %d, root: %s }", h.nentries, h.root)
+	}
+	return str
+}
+
 func (h Hamt) IsEmpty() bool {
 	return h.root == nil
 }
@@ -171,19 +188,28 @@ func (h Hamt) copy() *Hamt {
 
 func (h *Hamt) copyUp(oldTable, newTable tableI, path pathT) {
 	if path.isEmpty() {
-		if h.root != oldTable {
-			panic("WTF! path.isEmpty() and h.root != oldTable")
-		}
+		//if uintptr(h.root) != uintptr(oldTable) {
+		//	panic("WTF! path.isEmpty() and h.root != oldTable")
+		//}
+
+		lgr.Printf("h.copyUp(...): path.IsEmpty(): h.root=newTable=%s", newTable)
 
 		h.root = newTable
 		return
 	}
 
+	lgr.Printf("h.copyUp(...): newTable=%s", newTable)
+
 	oldParent := path.pop()
+
+	if newTable == nil {
+		lgr.Printf("copyUp(): newTable == nil && oldTable.hashcode() = %s", hash60String(oldTable.hashcode()))
+	}
 
 	newParent := oldParent.set(oldTable.hashcode(), newTable)
 
 	h.copyUp(oldParent, newParent, path)
+
 	return
 }
 
@@ -194,8 +220,7 @@ func (h Hamt) Get(key []byte) (interface{}, bool) {
 		return nil, false
 	}
 
-	var hash = hash64(key)
-	var hash60 = hash & sixtyBitMask
+	var hash60 = hash64(key) & sixtyBitMask
 
 	// We know h.root != nil (above IsEmpty test) and h.root is a tableI
 	// intrface compliant struct.
@@ -221,22 +246,21 @@ func (h Hamt) Get(key []byte) (interface{}, bool) {
 	return nil, false
 }
 
-func (h Hamt) Put(key []byte, val interface{}) (newHamt *Hamt, inserted bool) {
-	//newHamt = Hamt{nil, 0} //always creating a new Hamt
-	newHamt = h.copy()
+func (h Hamt) Put(key []byte, val interface{}) (nh *Hamt, inserted bool) {
+	nh = h.copy()
 	//inserted = true //true == inserted key/val pair; false == replaced val
 
 	var hash60 = hash64(key) & sixtyBitMask
-	var depth uint
+	var depth uint = 0
 	var newLeaf = NewFlatLeaf(hash60, key, val)
 
 	/**********************************************************
 	 * If the Trie root is empty, insert a table with a leaf. *
 	 **********************************************************/
 	if h.IsEmpty() {
-		newHamt.root = NewCompressedTable(depth, hash60, newLeaf)
-		newHamt.nentries++
-		return newHamt, true
+		nh.root = NewCompressedTable(depth, hash60, newLeaf)
+		nh.nentries++
+		return nh, true
 	}
 
 	var path = newPathT()
@@ -251,9 +275,9 @@ func (h Hamt) Put(key []byte, val interface{}) (newHamt *Hamt, inserted bool) {
 		 ***********************************************/
 		if curNode == nil {
 			var newTable = curTable.set(hash60, newLeaf)
-			newHamt.nentries++
-			newHamt.copyUp(curTable, newTable, path)
-			return newHamt, true
+			nh.nentries++
+			nh.copyUp(curTable, newTable, path)
+			return nh, true
 		}
 
 		/**********************************
@@ -274,10 +298,10 @@ func (h Hamt) Put(key []byte, val interface{}) (newHamt *Hamt, inserted bool) {
 				var newLeaf leafI
 				newLeaf, inserted = oldLeaf.put(key, val)
 				if inserted {
-					newHamt.nentries++
+					nh.nentries++
 				}
 				var newTable = curTable.set(oldLeaf.hashcode(), newLeaf)
-				newHamt.copyUp(curTable, newTable, path)
+				nh.copyUp(curTable, newTable, path)
 
 				return
 			}
@@ -293,9 +317,9 @@ func (h Hamt) Put(key []byte, val interface{}) (newHamt *Hamt, inserted bool) {
 
 			newTable := curTable.set(hash60, collisionTable)
 
-			newHamt.nentries++
-			newHamt.copyUp(curTable, newTable, path)
-			return newHamt, true
+			nh.nentries++
+			nh.copyUp(curTable, newTable, path)
+			return nh, true
 		}
 
 		path.push(curTable)
@@ -307,12 +331,78 @@ func (h Hamt) Put(key []byte, val interface{}) (newHamt *Hamt, inserted bool) {
 
 	} //end: for
 
-	return newHamt, false
+	return nh, false
 }
 
-func (h Hamt) Del(key []byte) (Hamt, interface{}, bool) {
+func (h Hamt) Del(key []byte) (nh *Hamt, val interface{}, deleted bool) {
+	if h.IsEmpty() {
+		return nil, nil, false
+	}
 
-	return Hamt{nil, 0}, nil, false
+	nh = h.copy()
+
+	var hash60 = hash64(key) & sixtyBitMask
+	var depth uint = 0
+
+	lgr.Printf("h.Del(%q): key/hash60 = %s", key, hash60String(hash60))
+
+	var path = newPathT()
+	var curTable = h.root
+	var curNode = curTable.get(hash60)
+
+	lgr.Printf("h.Del(%q): curNode = %s", key, curNode)
+
+	for depth = 0; curNode != nil && depth <= MAXDEPTH; depth++ {
+		lgr.Printf("h.Del(\"%s\"): ############ depth = %d", key, depth)
+
+		if oldLeaf, ok := curNode.(leafI); ok {
+
+			lgr.Printf("h.Del(%q): oldLeaf = %s", key, oldLeaf.String())
+
+			if hash60Equal(oldLeaf.hashcode(), hash60) {
+				lgr.Printf("h.Del(%q): oldLeaf is what I was looking for", key)
+
+				var newLeaf, val, deleted = oldLeaf.del(key)
+
+				lgr.Printf("h.Del(%q): oldLeaf.del(%q) => %s, %v, %t", key, key, newLeaf, val, deleted)
+
+				lgr.Printf("h.Del(%q): curTable =\n%s", key, curTable)
+				lgr.Printf("h.Del(%q): calling curTable.set(%s, %s)", key, hash60String(oldLeaf.hashcode()), newLeaf)
+
+				var newTable = curTable.set(oldLeaf.hashcode(), newLeaf)
+
+				if newTable == nil {
+					lgr.Printf("h.Del(%q): newTable =\n%s", key, nil)
+				} else {
+					lgr.Printf("h.Del(%q): newTable =\n%s", key, newTable.LongString("h.Del(\"c\")\t"))
+				}
+				lgr.Printf("h.Del(%q): curTable =\n%s", key, curTable.LongString("h.Del(\"c\")\t"))
+
+				nh.copyUp(curTable, newTable, path)
+
+				if deleted {
+					nh.nentries--
+				}
+
+				return nh, val, deleted
+			}
+
+			// Found a leaf, but not the leaf I was looking for.
+			return nil, nil, false
+		}
+
+		// curTable now becomes the parentTable and we push it on to the path
+		path.push(curTable)
+
+		// the curNode MUST BE a tableI so we coerce and set it to curTable
+		curTable = curNode.(tableI)
+
+		curNode = curTable.get(hash60)
+		lgr.Printf("h.Del(\"%s\"): loop for depth", key)
+	}
+	// curNode == nil
+
+	return nil, nil, false
 }
 
 // nodeI is the interface for every entry in a table; so table entries are
@@ -342,8 +432,12 @@ type nodeI interface {
 //
 type tableI interface {
 	nodeI
-	nentries() uint                      // get the number of node entries
-	entries() []tableEntry               // get a list of index and node pairs
+	nentries() uint // get the number of node entries
+
+	// Get an Ordered list of index and node pairs. This slice MUST BE Ordered
+	// from lowest index to highest.
+	entries() []tableEntry
+
 	get(hash uint64) nodeI               // get an entry
 	set(hash uint64, entry nodeI) tableI // set and entry
 	del(hash uint64) (tableI, nodeI)     // delete an entry
@@ -457,6 +551,29 @@ func NewCompressedTable2(depth uint, hashPath uint64, leaf1 leafI, leaf2 flatLea
 	return retTable
 }
 
+// DowngradeToCompressedTable() converts fullTable structs that have less than
+// TABLE_CAPACITY/2 tableEntry's. One important thing we know is that none of
+// the entries will collide with another.
+//
+// The ents []tableEntry slice is guaranteed to be in order from lowest idx to
+// highest. tableI.entries() also adhears to this contract.
+func DowngradeToCompressedTable(depth uint, hashPath uint64, ents []tableEntry) *compressedTable {
+	var nt = new(compressedTable)
+	nt.hashPath = hashPath
+	nt.depth = depth
+	//nt.nodeMap = 0
+	nt.nodes = make([]nodeI, len(ents))
+
+	for i := 0; i < len(ents); i++ {
+		var ent = ents[i]
+		var nodeBit = uint64(1 << ent.idx)
+		nt.nodeMap |= nodeBit
+		nt.nodes[i] = ent.node
+	}
+
+	return nt
+}
+
 func (t compressedTable) hashcode() uint64 {
 	return t.hashPath
 }
@@ -504,6 +621,8 @@ func (t compressedTable) nentries() uint {
 	return BitCount64(t.nodeMap)
 }
 
+// This function MUST return the slice of tableEntry structs from lowest
+// tableEntry.idx to highest tableEntry.idx .
 func (t compressedTable) entries() []tableEntry {
 	var n = t.nentries()
 	var ents = make([]tableEntry, n)
@@ -540,7 +659,12 @@ func (t compressedTable) get(hashPath uint64) nodeI {
 	return node
 }
 
-func (t compressedTable) set(hashPath uint64, newNode nodeI) tableI {
+// set(uint64, nodeI) is required for tableI
+func (t compressedTable) set(hashPath uint64, nn nodeI) tableI {
+	lgr.Printf("compressedTable.set(%s, %s)", hash60String(hashPath), nn)
+	lgr.Printf("compressedTable.set(%s, %s): hashPathString(hashPath, t.depth=%d) = %s", hashPathString(hashPath, t.depth), nn, t.depth, hashPathString(hashPath, t.depth))
+
+	lgr.Printf("nt.set(%s,%s): (compressedTable) t =\n%s", hashPathString(hashPath, t.depth), nn, t.LongString(""))
 	var nt = t.copy()
 
 	// Get the regular index of the node we want to access
@@ -551,28 +675,50 @@ func (t compressedTable) set(hashPath uint64, newNode nodeI) tableI {
 	// Calculate the index into compressedTable.nodes[] for this entry
 	var i = BitCount64(t.nodeMap & bitMask)
 
-	// Adding newNode to compressedTable
-	//
-	if (t.nodeMap & nodeBit) == 0 {
-		// slot is empty, so reserve that nodeBit in the nt.nodeMap
-		nt.nodeMap |= nodeBit
+	if nn != nil {
+		lgr.Printf("nt.set(%s,%s): nn != nil", hashPathString(hashPath, t.depth), nn)
+		if (t.nodeMap & nodeBit) == 0 {
+			lgr.Printf("nt.set(%s,%s): (t.nodeMap & nodeBit) == 0", hashPathString(hashPath, t.depth), nn)
 
-		// insert newnode into the i'th spot of nt.nodes[]
-		nt.nodes = append(nt.nodes[:i], append([]nodeI{newNode}, nt.nodes[i:]...)...)
+			nt.nodeMap |= nodeBit
 
-		if BitCount64(nt.nodeMap) >= TABLE_CAPACITY/2 {
-			// promote compressedTable to fullTable
-			return NewFullTable(nt.depth, nt.hashPath, nt.entries())
+			// insert newnode into the i'th spot of nt.nodes[]
+			nt.nodes = append(nt.nodes[:i], append([]nodeI{nn}, nt.nodes[i:]...)...)
+
+			if BitCount64(nt.nodeMap) >= TABLE_CAPACITY/2 {
+				lgr.Printf("nt.set(%s,%s): BitCoufffffffffffffnt64(nt.nodeMap),%d >= TABLE_CAPACITY/2,%d", hashPathString(hashPath, t.depth), nn, BitCount64(nt.nodeMap), TABLE_CAPACITY/2)
+				// promote compressedTable to fullTable
+				return NewFullTable(nt.depth, nt.hashPath, nt.entries())
+			}
+
+			lgr.Printf("nt.set(%s,%s): skipping down to return")
+		} else /* if (t.nodeMap & nodeBit) > 0 */ {
+			// don't need to touch nt.nodeMap
+			nt.nodes[i] = nn //overwrite i'th slice entry
 		}
+	} else /* if nn == nil */ {
+		lgr.Printf("nt.set(%s,%s): nn == nil", hashPathString(hashPath, t.depth), nn)
+		if (t.nodeMap & nodeBit) > 0 {
+			lgr.Printf("nt.set(%s,%s): (t.nodeMap & nodeBit) == 0", hashPathString(hashPath, t.depth), nn)
 
-		// Just return the new compressedTable
-		return nt
+			nt.nodeMap &^= nodeBit //unset nodeBit via bitClear &^ op
+			nt.nodes = append(nt.nodes[:i], nt.nodes[i+1:]...)
+
+			if nt.nodeMap == 0 {
+				lgr.Printf("nt.set(%s,%s): IF nt.nodeMap == 0; THEN returning nil", hashPathString(hashPath, t.depth), nn)
+
+				return nil
+			}
+
+			lgr.Printf("nt.set(%s,%s): skipping down to return", hashPathString(hashPath, t.depth), nn)
+		} else if (t.nodeMap & nodeBit) == 0 {
+			lgr.Printf("if nt.set(%s,%s): IF (t.nodeMap & nodeBit) == 0; THEN return t", hashPathString(hashPath, t.depth), nn)
+			// do nothing
+			return t
+		}
 	}
 
-	// slot is used
-
-	nt.nodes[i] = newNode
-
+	lgr.Printf("nt.set(%s,%s): final return", hashPathString(hashPath, t.depth), nn)
 	return nt
 }
 
@@ -656,6 +802,9 @@ func (t fullTable) nentries() uint {
 }
 
 // entries() is required for tableI
+//
+// This function MUST return the slice of tableEntry structs from lowest
+// tableEntry.idx to highest tableEntry.idx .
 func (t fullTable) entries() []tableEntry {
 	var n = t.nentries()
 	var ents = make([]tableEntry, n)
@@ -685,14 +834,23 @@ func (t fullTable) get(hashPath uint64) nodeI {
 }
 
 // set(uint64, nodeI) is required for tableI
-func (t fullTable) set(hashPath uint64, node nodeI) tableI {
+func (t fullTable) set(hashPath uint64, nn nodeI) tableI {
 	var nt = t.copy()
 
 	var idx = index(hashPath, nt.depth)
 	var nodeBit = uint64(1 << idx)
 
-	nt.nodeMap |= nodeBit
-	nt.nodes[idx] = node
+	if nn != nil {
+		nt.nodeMap |= nodeBit
+		nt.nodes[idx] = nn
+	} else /* if nn == nil */ {
+		nt.nodeMap &^= nodeBit
+		nt.nodes[idx] = nn
+
+		if BitCount64(nt.nodeMap) < TABLE_CAPACITY/2 {
+			return DowngradeToCompressedTable(nt.depth, nt.hashPath, nt.entries())
+		}
+	}
 
 	return nt
 }
@@ -734,11 +892,7 @@ func (l flatLeaf) copy() *flatLeaf {
 }
 
 func (l flatLeaf) String() string {
-	// flatLeaf{hash60:0x0123456789abcde01, key:"foo", val:1}
-	//	var str = fmt.Sprintf("flatLeaf{hash60:0x%016x, key:[]byte(\"%s\"), val:%v}", l.hash60, l.key, l.val)
-	var str = fmt.Sprintf("flatLeaf{hash60:%s, key:[]byte(\"%s\"), val:%v}", hash60String(l.hash60), l.key, l.val)
-
-	return str
+	return fmt.Sprintf("flatLeaf{hash60:%s, key:[]byte(\"%s\"), val:%v}", hash60String(l.hash60), l.key, l.val)
 }
 
 func (l flatLeaf) LongString(indent string) string {
@@ -816,10 +970,7 @@ func (l collisionLeaf) String() string {
 	}
 	var jkvstr = strings.Join(kvstrs, ",")
 
-	//var str = fmt.Sprintf("{hash60:0x%016x, kvs:[]kv{%s}}", l.hash60, jkvstr)
-	var str = fmt.Sprintf("{hash60:%s, kvs:[]kv{%s}}", hash60String(l.hash60), jkvstr)
-
-	return str
+	return fmt.Sprintf("{hash60:%s, kvs:[]kv{%s}}", hash60String(l.hash60), jkvstr)
 }
 
 func (l collisionLeaf) LongString(indent string) string {
@@ -862,22 +1013,20 @@ func (l collisionLeaf) del(key []byte) (leafI, interface{}, bool) {
 		return nil, nil, false
 	}
 
-	var retVal interface{} = nil
-	var removed bool = false
-	var nl = new(collisionLeaf)
+	var nl = l.copy()
 
-	nl.hash60 = l.hash60
+	for i := 0; i < len(nl.kvs); i++ {
+		if byteSlicesEqual(key, nl.kvs[i].key) {
+			var retVal = nl.kvs[i].val
 
-	for i := 0; i < len(l.kvs); i++ {
-		if !byteSlicesEqual(key, l.kvs[i].key) {
-			nl.kvs = append(nl.kvs, l.kvs[i])
-		} else {
-			retVal = l.kvs[i].val
-			removed = true
+			// removing the i'th element of a slice; wiki/SliceTricks "Delete"
+			nl.kvs = append(nl.kvs[:i], nl.kvs[i+1:]...)
+
+			return nl, retVal, true
 		}
 	}
 
-	return nl, retVal, removed
+	return nil, nil, false
 }
 
 //byteSlicesEqual function
