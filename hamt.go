@@ -188,27 +188,51 @@ func (h Hamt) copy() *Hamt {
 
 func (h *Hamt) copyUp(oldTable, newTable tableI, path pathT) {
 	if path.isEmpty() {
-		//if uintptr(h.root) != uintptr(oldTable) {
-		//	panic("WTF! path.isEmpty() and h.root != oldTable")
-		//}
-
-		lgr.Printf("h.copyUp(...): path.IsEmpty(): h.root=newTable=%s", newTable)
-
+		//lgr.Printf("h.copyUp(...): path.IsEmpty(): h.root=newTable=%s", newTable)
 		h.root = newTable
 		return
 	}
 
-	lgr.Printf("h.copyUp(...): newTable=%s", newTable)
+	//lgr.Printf("h.copyUp(...): newTable=%s", newTable)
 
 	oldParent := path.pop()
 
-	if newTable == nil {
-		lgr.Printf("copyUp(): newTable == nil && oldTable.hashcode() = %s", hash60String(oldTable.hashcode()))
+	// Cases
+	// #1 newTable == nil
+	// #2 newTable.nentries() == 1
+	// #3 newTable.nentries() > 1
+	//
+	// In case #1 and #3 oldParent.set() & copyUp(oldParent, newParent)
+	//
+	// In case #2 find the oneEntry	in newTable
+	//            and oldParent.set(oldTable.hashcode(), oneEntry)
+	//            and copyUp(oldParent, newParent)
+
+	if newTable.nentries() == 1 {
+		// find the oneEntry in	newTable
+
+		//var idx = uint(math.Log2(float64(newTable.nodeMap)))
+		//var node = newTable.get(hashPath)
+		//var newParent = oldParent.set(newTable.hashcode(), node)
+		//h.copyUp(oldParent, newParent, path)
+
+		var nt = newTable.(*compressedTable)
+
+		for idx := uint(0); idx < TABLE_CAPACITY; idx++ {
+			var hashPath = nt.hashPath | uint64(idx<<(nt.depth*NBITS))
+
+			if (nt.nodeMap & (1 << idx)) > 0 {
+				var node = nt.get(hashPath)
+				var newParent = oldParent.set(nt.hashcode(), node)
+				h.copyUp(oldParent, newParent, path)
+				break
+			}
+		}
+
+	} else { // newTable == nil OR newTable.nentries() > 1
+		var newParent = oldParent.set(oldTable.hashcode(), newTable)
+		h.copyUp(oldParent, newParent, path)
 	}
-
-	newParent := oldParent.set(oldTable.hashcode(), newTable)
-
-	h.copyUp(oldParent, newParent, path)
 
 	return
 }
@@ -374,11 +398,13 @@ func (h Hamt) Del(key []byte) (nh *Hamt, val interface{}, deleted bool) {
 				if newTable == nil {
 					lgr.Printf("h.Del(%q): newTable =\n%s", key, nil)
 				} else {
-					lgr.Printf("h.Del(%q): newTable =\n%s", key, newTable.LongString("h.Del(\"c\")\t"))
+					lgr.Printf("h.Del(%q): newTable =\n%s", key, newTable.LongString("\t\t"))
 				}
-				lgr.Printf("h.Del(%q): curTable =\n%s", key, curTable.LongString("h.Del(\"c\")\t"))
+				lgr.Printf("h.Del(%q): curTable =\n%s", key, curTable.LongString("\t\t"))
 
 				nh.copyUp(curTable, newTable, path)
+
+				lgr.Printf("h.Del(%q): nh = \n%s", key, nh.LongString(""))
 
 				if deleted {
 					nh.nentries--
@@ -661,10 +687,6 @@ func (t compressedTable) get(hashPath uint64) nodeI {
 
 // set(uint64, nodeI) is required for tableI
 func (t compressedTable) set(hashPath uint64, nn nodeI) tableI {
-	lgr.Printf("compressedTable.set(%s, %s)", hash60String(hashPath), nn)
-	lgr.Printf("compressedTable.set(%s, %s): hashPathString(hashPath, t.depth=%d) = %s", hashPathString(hashPath, t.depth), nn, t.depth, hashPathString(hashPath, t.depth))
-
-	lgr.Printf("nt.set(%s,%s): (compressedTable) t =\n%s", hashPathString(hashPath, t.depth), nn, t.LongString(""))
 	var nt = t.copy()
 
 	// Get the regular index of the node we want to access
@@ -676,49 +698,35 @@ func (t compressedTable) set(hashPath uint64, nn nodeI) tableI {
 	var i = BitCount64(t.nodeMap & bitMask)
 
 	if nn != nil {
-		lgr.Printf("nt.set(%s,%s): nn != nil", hashPathString(hashPath, t.depth), nn)
 		if (t.nodeMap & nodeBit) == 0 {
-			lgr.Printf("nt.set(%s,%s): (t.nodeMap & nodeBit) == 0", hashPathString(hashPath, t.depth), nn)
-
 			nt.nodeMap |= nodeBit
 
 			// insert newnode into the i'th spot of nt.nodes[]
 			nt.nodes = append(nt.nodes[:i], append([]nodeI{nn}, nt.nodes[i:]...)...)
 
 			if BitCount64(nt.nodeMap) >= TABLE_CAPACITY/2 {
-				lgr.Printf("nt.set(%s,%s): BitCoufffffffffffffnt64(nt.nodeMap),%d >= TABLE_CAPACITY/2,%d", hashPathString(hashPath, t.depth), nn, BitCount64(nt.nodeMap), TABLE_CAPACITY/2)
 				// promote compressedTable to fullTable
 				return NewFullTable(nt.depth, nt.hashPath, nt.entries())
 			}
-
-			lgr.Printf("nt.set(%s,%s): skipping down to return")
 		} else /* if (t.nodeMap & nodeBit) > 0 */ {
 			// don't need to touch nt.nodeMap
 			nt.nodes[i] = nn //overwrite i'th slice entry
 		}
 	} else /* if nn == nil */ {
-		lgr.Printf("nt.set(%s,%s): nn == nil", hashPathString(hashPath, t.depth), nn)
 		if (t.nodeMap & nodeBit) > 0 {
-			lgr.Printf("nt.set(%s,%s): (t.nodeMap & nodeBit) == 0", hashPathString(hashPath, t.depth), nn)
 
 			nt.nodeMap &^= nodeBit //unset nodeBit via bitClear &^ op
 			nt.nodes = append(nt.nodes[:i], nt.nodes[i+1:]...)
 
 			if nt.nodeMap == 0 {
-				lgr.Printf("nt.set(%s,%s): IF nt.nodeMap == 0; THEN returning nil", hashPathString(hashPath, t.depth), nn)
-
 				return nil
 			}
-
-			lgr.Printf("nt.set(%s,%s): skipping down to return", hashPathString(hashPath, t.depth), nn)
 		} else if (t.nodeMap & nodeBit) == 0 {
-			lgr.Printf("if nt.set(%s,%s): IF (t.nodeMap & nodeBit) == 0; THEN return t", hashPathString(hashPath, t.depth), nn)
 			// do nothing
 			return t
 		}
 	}
 
-	lgr.Printf("nt.set(%s,%s): final return", hashPathString(hashPath, t.depth), nn)
 	return nt
 }
 
