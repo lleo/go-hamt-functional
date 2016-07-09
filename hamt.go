@@ -188,12 +188,9 @@ func (h Hamt) copy() *Hamt {
 
 func (h *Hamt) copyUp(oldTable, newTable tableI, path pathT) {
 	if path.isEmpty() {
-		//lgr.Printf("h.copyUp(...): path.IsEmpty(): h.root=newTable=%s", newTable)
 		h.root = newTable
 		return
 	}
-
-	//lgr.Printf("h.copyUp(...): newTable=%s", newTable)
 
 	oldParent := path.pop()
 
@@ -368,43 +365,17 @@ func (h Hamt) Del(key []byte) (nh *Hamt, val interface{}, deleted bool) {
 	var hash60 = hash64(key) & sixtyBitMask
 	var depth uint = 0
 
-	lgr.Printf("h.Del(%q): key/hash60 = %s", key, hash60String(hash60))
-
 	var path = newPathT()
 	var curTable = h.root
 	var curNode = curTable.get(hash60)
 
-	lgr.Printf("h.Del(%q): curNode = %s", key, curNode)
-
 	for depth = 0; curNode != nil && depth <= MAXDEPTH; depth++ {
-		lgr.Printf("h.Del(\"%s\"): ############ depth = %d", key, depth)
-
 		if oldLeaf, ok := curNode.(leafI); ok {
-
-			lgr.Printf("h.Del(%q): oldLeaf = %s", key, oldLeaf.String())
-
 			if hash60Equal(oldLeaf.hashcode(), hash60) {
-				lgr.Printf("h.Del(%q): oldLeaf is what I was looking for", key)
-
 				var newLeaf, val, deleted = oldLeaf.del(key)
-
-				lgr.Printf("h.Del(%q): oldLeaf.del(%q) => %s, %v, %t", key, key, newLeaf, val, deleted)
-
-				lgr.Printf("h.Del(%q): curTable =\n%s", key, curTable)
-				lgr.Printf("h.Del(%q): calling curTable.set(%s, %s)", key, hash60String(oldLeaf.hashcode()), newLeaf)
-
 				var newTable = curTable.set(oldLeaf.hashcode(), newLeaf)
 
-				if newTable == nil {
-					lgr.Printf("h.Del(%q): newTable =\n%s", key, nil)
-				} else {
-					lgr.Printf("h.Del(%q): newTable =\n%s", key, newTable.LongString("\t\t"))
-				}
-				lgr.Printf("h.Del(%q): curTable =\n%s", key, curTable.LongString("\t\t"))
-
 				nh.copyUp(curTable, newTable, path)
-
-				lgr.Printf("h.Del(%q): nh = \n%s", key, nh.LongString(""))
 
 				if deleted {
 					nh.nentries--
@@ -424,7 +395,6 @@ func (h Hamt) Del(key []byte) (nh *Hamt, val interface{}, deleted bool) {
 		curTable = curNode.(tableI)
 
 		curNode = curTable.get(hash60)
-		lgr.Printf("h.Del(\"%s\"): loop for depth", key)
 	}
 	// curNode == nil
 
