@@ -330,17 +330,17 @@ func TestPutDelTwoTableDeepCollisionIsEmpty(t *testing.T) {
 		t.Error("h.Get(\"d\") failed to retrieve val = 27")
 	}
 
-	//t.Logf("After h.Del(%q): h =\n%s", "aa", h.LongString(""))
-	//
-	//if !h.IsEmpty() {
-	//	t.Error("h is NOT empty")
-	//}
+	t.Logf("After h.Del(%q): h =\n%s", "aa", h.LongString(""))
+
+	if !h.IsEmpty() {
+		t.Error("h is NOT empty")
+	}
 
 	return
 }
 
 // Where Many == 64
-func dTestEmptyPutManyDelManyIsEmpty(t *testing.T) {
+func TestEmptyPutManyDelManyIsEmpty(t *testing.T) {
 	var h = &EMPTY
 
 	for i := 0; i < 64; i++ {
@@ -365,16 +365,17 @@ func dTestEmptyPutManyDelManyIsEmpty(t *testing.T) {
 			t.Errorf("val,%d != expected_val,%d", val, expected_val)
 		}
 
-		t.Log("h.root =\n", h.root.LongString(""))
+		if h.root == nil {
+			t.Log("h.root == nil")
+		} else {
+			t.Log("h.root ==\n", h.root.LongString(""))
+		}
 	}
-	//
-	// End Duplicate of TestPutOnceDelOnce
-	//
-	//t.Log("### Testing compressedTable Shrinkage ###")
-	//
-	//t.Log(h)
-	//
-	//if !h.IsEmpty() {
-	//	t.Fatal("NOT h.IsEmpty()")
-	//}
+	t.Log("### Testing compressedTable Shrinkage ###")
+
+	t.Log(h)
+
+	if !h.IsEmpty() {
+		t.Fatal("NOT h.IsEmpty()")
+	}
 }
