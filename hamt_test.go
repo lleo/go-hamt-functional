@@ -139,9 +139,6 @@ func TestEmptyPutManyGetMany(t *testing.T) {
 		h, _ = h.Put(key, val)
 	}
 
-	lgr.Printf("h.root =\n%s", h.root.LongString(""))
-	t.Log("h.root =\n", h.root.LongString(""))
-
 	for i := 0; i < 64; i++ {
 		var key = midNumEnts[i].key
 		var expected_val = midNumEnts[i].val
@@ -164,12 +161,9 @@ func TestEmptyPutOnceDelOnce(t *testing.T) {
 
 	h, _ = h.Put(key, val)
 
-	t.Logf("h.root = %s", h.root.LongString(""))
-
 	var v interface{}
 	var deleted, found bool
 
-	lgr.Printf("h =\n%s", h.LongString(""))
 	h, v, deleted = h.Del(key)
 	if !deleted {
 		t.Fatalf("key=%q not deleted from h.", key)
@@ -192,8 +186,6 @@ func TestEmptyPutOnceDelOnceIsEmpty(t *testing.T) {
 
 	h, _ = h.Put(key, val)
 
-	t.Logf("h.root = %s", h.root.LongString(""))
-
 	var v interface{}
 	var deleted, found bool
 
@@ -210,14 +202,6 @@ func TestEmptyPutOnceDelOnceIsEmpty(t *testing.T) {
 		t.Fatalf("h.Get(%q) retrived a value v=%v.", key, v)
 	}
 
-	//
-	// End Duplicate of TestPutOnceDelOnce
-	//
-	t.Log("### Start of uninque TestEmptyPutOnceDelOnceIsEmpty ###")
-	t.Log("### Testing compressedTable Shrinkage ###")
-
-	t.Log(h)
-
 	if !h.IsEmpty() {
 		t.Fatal("NOT h.IsEmpty()")
 	}
@@ -233,8 +217,6 @@ func TestEmptyPutThriceFlatDelThriceIsEmpty(t *testing.T) {
 		h, _ = h.Put(keys[i], vals[i])
 	}
 
-	t.Logf("h.root =\n%s", h.root.LongString(""))
-
 	for i := range vals {
 		var val interface{}
 		var deleted bool
@@ -247,10 +229,7 @@ func TestEmptyPutThriceFlatDelThriceIsEmpty(t *testing.T) {
 			t.Fatalf("deleted val for \"%s\" val,%d != vals[%d],%d from h", keys[i], val, i, vals[i])
 		}
 
-		t.Logf("h =\n%s", h.LongString(""))
 	}
-
-	t.Logf("h =\n%s", h.LongString(""))
 
 	if !h.IsEmpty() {
 		t.Fatal("h is NOT empty")
@@ -259,22 +238,15 @@ func TestEmptyPutThriceFlatDelThriceIsEmpty(t *testing.T) {
 
 // "c":3 && "fg":38 at depth 1
 func TestPutDelOneTableDeepCollisionIsEmpty(t *testing.T) {
-	lgr.Println("TEST TestPutDelOneTableDeepCollisionIsEmpty")
 	var h = &EMPTY
 
 	h, _ = h.Put([]byte("c"), 3)
 	h, _ = h.Put([]byte("fg"), 38)
 
-	lgr.Printf("h =\n%s", h.LongString(""))
-	t.Logf("h =\n%s", h.LongString(""))
-
 	var val interface{}
 	var deleted bool
 
-	lgr.Println("TEST Calling h.Del(\"c\")")
 	h, val, deleted = h.Del([]byte("c"))
-	lgr.Printf("TEST h.Del(\"c\") => %s, %v, %b", h, val, deleted)
-	lgr.Printf("TEST h =\n%s", h.LongString("TEST\t"))
 
 	if !deleted {
 		t.Error("failed to delete for key=\"c\"")
@@ -283,9 +255,7 @@ func TestPutDelOneTableDeepCollisionIsEmpty(t *testing.T) {
 		t.Error("h.Get(\"c\") failed to retrieve val = 3")
 	}
 
-	lgr.Println("TEST Calling h.Del(\"fg\")")
 	h, val, deleted = h.Del([]byte("fg"))
-	lgr.Printf("TEST h.Del(\"c\") => %s, %v, %t", h, val, deleted)
 
 	if !deleted {
 		t.Error("failed to delete for key=\"fg\"")
@@ -293,8 +263,6 @@ func TestPutDelOneTableDeepCollisionIsEmpty(t *testing.T) {
 	if val != 38 {
 		t.Error("h.Get(\"fg\") failed to retrieve val = 38")
 	}
-
-	t.Logf("h =\n%s", h.LongString(""))
 
 	if !h.IsEmpty() {
 		t.Error("h is NOT empty")
