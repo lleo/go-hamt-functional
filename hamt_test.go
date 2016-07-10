@@ -1,6 +1,7 @@
 package hamt
 
 import (
+	"log"
 	"os"
 	"testing"
 
@@ -36,19 +37,39 @@ func path2hash(path []uint8) uint64 {
 }
 
 var midNumEnts []keyVal
+var hugeNumEnts []keyVal
 
 func TestMain(m *testing.M) {
 	// SETUP
 
-	midNumEnts = make([]keyVal, 0, 32) //binary growth
-	var s = util.Str("")
+	var logFile, err = os.OpenFile("test.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0755)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer logFile.Close()
+	Lgr.SetOutput(logFile)
+
+	midNumEnts = make([]keyVal, 0, 32)
+	var s0 = util.Str("")
 	//nEnts := 10000 //ten thousand
-	nEnts := 1000
-	for i := 0; i < nEnts; i++ {
-		s = s.Inc(1) //get off "" first
-		var key = []byte(s)
+	var midEnts = 1000
+	for i := 0; i < midEnts; i++ {
+		s0 = s0.Inc(1) //get off "" first
+		var key = []byte(s0)
 		var val = i + 1
 		midNumEnts = append(midNumEnts, keyVal{key, val})
+	}
+
+	hugeNumEnts = make([]keyVal, 0, 32)
+	var s1 = util.Str("")
+	//var hugeEnts = 1024
+	var hugeEnts = 32 * 1024
+	//var hugeEnts = 256 * 1024 * 1024 //256 MB
+	for i := 0; i < hugeEnts; i++ {
+		s1 = s1.Inc(1)
+		var key = []byte(s1)
+		var val = i + 1
+		hugeNumEnts = append(hugeNumEnts, keyVal{key, val})
 	}
 
 	// RUN
@@ -57,6 +78,28 @@ func TestMain(m *testing.M) {
 	// TEARDOW
 
 	os.Exit(xit)
+}
+
+func dTestEmptyPutDelCrazy(t *testing.T) {
+	var key = []byte("aaaaaaaaaaaaaaaaaaaaaabbcdefghijkl")
+	var val = 14126
+	var h = &EMPTY
+
+	h, _ = h.Put(key, val)
+
+	var v interface{}
+	var d bool
+	h, v, d = h.Del(key)
+	if !d {
+		t.Fatalf("failed to retrieve %q", key)
+	}
+	if v != val {
+		t.Fatalf("failed to retrieve the correct val,%d for %q", val, key)
+	}
+
+	if !h.IsEmpty() {
+		t.Fatal("hash is not Empty")
+	}
 }
 
 func TestEmptyPutOnceGetOnce(t *testing.T) {
@@ -347,3 +390,41 @@ func TestEmptyPutManyDelManyIsEmpty(t *testing.T) {
 		t.Fatal("NOT h.IsEmpty()")
 	}
 }
+
+func TestEmptyPutDelTrumpIsEmpty(t *testing.T) {
+	var h = &EMPTY
+
+	for i := 0; i < len(hugeNumEnts); i++ {
+		h, _ = h.Put(hugeNumEnts[i].key, hugeNumEnts[i].val)
+	}
+
+	Lgr.Println("h.root =")
+	Lgr.Println(h.root.LongString(""))
+
+	for i := 0; i < len(hugeNumEnts); i++ {
+		var key = hugeNumEnts[i].key
+		var expected_val = hugeNumEnts[i].val
+
+		var val interface{}
+		var deleted bool
+		h, val, deleted = h.Del(key)
+		if !deleted {
+			t.Errorf("Did NOT find&delete for key=\"%s\"", key)
+		}
+		if val != expected_val {
+			t.Errorf("val,%d != expected_val,%d", val, expected_val)
+		}
+	}
+	//t.Log("### Testing compressedTable Shrinkage ###")
+
+	if !h.IsEmpty() {
+		Lgr.Println(h.LongString(""))
+		t.Fatal("NOT h.IsEmpty()")
+	}
+}
+
+// collided depth 3:
+//     "b",2 & "rstuvvw",670
+//     "gg",39 & "yzz",152     <=== I like this one
+//     "mm",51 & "efggh",283
+//     "stt",169 & "abcddefgh",940
