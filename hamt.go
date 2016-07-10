@@ -32,7 +32,7 @@ import (
 	"strings"
 )
 
-var lgr = log.New(os.Stderr, "[hamt] ", log.Lshortfile)
+var Lgr = log.New(os.Stderr, "[hamt] ", log.Lshortfile)
 
 // The number of bits to partition the hashcode and to index each table. By
 // logical necessity this MUST be 6 bits because 2^6 == 64; the number of
@@ -48,7 +48,7 @@ const mask60 = 1<<60 - 1
 // total and cunsumes 60 of the 64 bit hashcode.
 const MAXDEPTH uint = 9
 
-const ASSERT_CONST bool = false
+const ASSERT_CONST bool = true
 
 func ASSERT(test bool, msg string) {
 	if ASSERT_CONST {
@@ -214,7 +214,7 @@ func (h *Hamt) copyUp(oldTable, newTable tableI, path pathT) {
 		var nt = newTable.(*compressedTable)
 
 		for idx := uint(0); idx < TABLE_CAPACITY; idx++ {
-			var hashPath = nt.hashPath | uint64(idx<<(nt.depth*NBITS))
+			var hashPath = nt.hashPath | uint64(idx<<(nt.depth()*NBITS))
 
 			if (nt.nodeMap & (1 << idx)) > 0 {
 				var node = nt.get(hashPath)
@@ -286,6 +286,9 @@ func (h Hamt) Put(key []byte, val interface{}) (nh *Hamt, inserted bool) {
 	var curTable = h.root
 
 	for depth = 0; depth < MAXDEPTH; depth++ {
+		// ASSERT curTable.depth == depth
+		//		ASSERT(curTable.depth() == depth,
+		//			fmt.Sprintf("curTable.depth() is not on the same level as we are operating on. curTable.depth(),%d != depth,%d\ncurTable=\n%s", curTable.depth(), depth, curTable))
 
 		var curNode = curTable.get(h60)
 
@@ -310,7 +313,7 @@ func (h Hamt) Put(key []byte, val interface{}) (nh *Hamt, inserted bool) {
 			 * or we are at MAXDEPTH and 60 of 64 bits match.
 			 **************************************************************/
 			if oldLeaf.hashcode() == h60 {
-				lgr.Printf("HOLY SHIT!!! Two keys collided with this same hash60 orig key=\"%s\" new key=\"%s\" h60=0x%016x", oldLeaf.(flatLeaf).key, key, h60)
+				Lgr.Printf("HOLY SHIT!!! Two keys collided with this same hash60 orig key=\"%s\" new key=\"%s\" h60=0x%016x", oldLeaf.(flatLeaf).key, key, h60)
 				//if oldLeaf is a flatLeaf this will promote it to a
 				// collisionLeaf, else it already is a collisionLeaf.
 
@@ -426,6 +429,7 @@ type nodeI interface {
 //
 type tableI interface {
 	nodeI
+	depth() uint
 	nentries() uint // get the number of node entries
 
 	// Get an Ordered list of index and node pairs. This slice MUST BE Ordered
@@ -435,6 +439,10 @@ type tableI interface {
 	get(hash uint64) nodeI               // get an entry
 	set(hash uint64, entry nodeI) tableI // set and entry
 	del(hash uint64) (tableI, nodeI)     // delete an entry
+
+	//get(idx uint) nodeI               // get an entry
+	//set(idx uint, entry nodeI) tableI // set and entry
+	//del(idx uint) (tableI, nodeI)     // delete an entry
 }
 
 // The compressedTable is a low memory usage version of a fullTable. It applies
@@ -464,7 +472,7 @@ type tableI interface {
 //
 type compressedTable struct {
 	hashPath uint64 // depth*NBITS of hash to get to this location in the Trie
-	depth    uint
+	depth_   uint
 	nodeMap  uint64
 	nodes    []nodeI
 }
@@ -481,7 +489,7 @@ func NewCompressedTable(depth uint, h60 uint64, lf leafI) tableI {
 
 	var ct = new(compressedTable)
 	ct.hashPath = h60 & hashPathMask(depth)
-	ct.depth = depth
+	ct.depth_ = depth
 	ct.nodeMap = 1 << idx
 	ct.nodes = make([]nodeI, 1)
 	ct.nodes[0] = lf
@@ -496,7 +504,7 @@ func NewCompressedTable2(depth uint, hashPath uint64, leaf1 leafI, leaf2 flatLea
 
 	var retTable = new(compressedTable) // return compressedTable
 	retTable.hashPath = hashPath & hashPathMask(depth)
-	retTable.depth = depth
+	retTable.depth_ = depth
 
 	var curTable = retTable //*compressedTable
 	var d uint
@@ -527,7 +535,7 @@ func NewCompressedTable2(depth uint, hashPath uint64, leaf1 leafI, leaf2 flatLea
 
 		//newTable.hashPath = buildHashPath(hashPath, d+1, idx1)
 		newTable.hashPath = hashPath | uint64(idx1<<(d*NBITS))
-		newTable.depth = d + 1
+		newTable.depth_ = d + 1
 
 		curTable.nodeMap = 1 << idx1 //Set the idx1'th bit
 		curTable.nodes[0] = newTable
@@ -554,7 +562,7 @@ func NewCompressedTable2(depth uint, hashPath uint64, leaf1 leafI, leaf2 flatLea
 func DowngradeToCompressedTable(depth uint, hashPath uint64, ents []tableEntry) *compressedTable {
 	var nt = new(compressedTable)
 	nt.hashPath = hashPath
-	nt.depth = depth
+	nt.depth_ = depth
 	//nt.nodeMap = 0
 	nt.nodes = make([]nodeI, len(ents))
 
@@ -568,6 +576,10 @@ func DowngradeToCompressedTable(depth uint, hashPath uint64, ents []tableEntry) 
 	return nt
 }
 
+func (t compressedTable) depth() uint {
+	return t.depth_
+}
+
 func (t compressedTable) hashcode() uint64 {
 	return t.hashPath
 }
@@ -575,7 +587,7 @@ func (t compressedTable) hashcode() uint64 {
 func (t compressedTable) copy() *compressedTable {
 	var nt = new(compressedTable)
 	nt.hashPath = t.hashPath
-	nt.depth = t.depth
+	nt.depth_ = t.depth_
 	nt.nodeMap = t.nodeMap
 	nt.nodes = append(nt.nodes, t.nodes...)
 	return nt
@@ -585,14 +597,14 @@ func (t compressedTable) copy() *compressedTable {
 func (t compressedTable) String() string {
 	// compressedTale{depth:%d, hashPath:[%d,%d,%d], nentries:%d,}
 	return fmt.Sprintf("compressedTable{depth:%d, hashPath:%s, nentries()=%d}",
-		t.depth, hashPathString(t.hashPath, t.depth), t.nentries())
+		t.depth(), hashPathString(t.hashPath, t.depth()), t.nentries())
 }
 
 // LongString() is required for nodeI
 func (t compressedTable) LongString(indent string) string {
 	var strs = make([]string, 3+len(t.nodes))
 
-	strs[0] = indent + fmt.Sprintf("compressedTable{depth=%d, hashPath=%s, nentries()=%d", t.depth, hashPathString(t.hashPath, t.depth), t.nentries())
+	strs[0] = indent + fmt.Sprintf("compressedTable{depth=%d, hashPath=%s, nentries()=%d", t.depth(), hashPathString(t.hashPath, t.depth()), t.nentries())
 
 	strs[1] = indent + "\tnodeMap=" + nodeMapString(t.nodeMap) + ","
 
@@ -635,7 +647,7 @@ func (t compressedTable) entries() []tableEntry {
 
 func (t compressedTable) get(hashPath uint64) nodeI {
 	// Get the regular index of the node we want to access
-	var idx = index(hashPath, t.depth) // 0..63
+	var idx = index(hashPath, t.depth()) // 0..63
 	var nodeBit = uint64(1 << idx)
 
 	if (t.nodeMap & nodeBit) == 0 {
@@ -658,9 +670,9 @@ func (t compressedTable) set(hashPath uint64, nn nodeI) tableI {
 	var nt = t.copy()
 
 	// Get the regular index of the node we want to access
-	var idx = index(hashPath, t.depth) // 0..63
-	var nodeBit = uint64(1 << idx)     // idx is the slot
-	var bitMask = nodeBit - 1          // mask all bits below the idx'th bit
+	var idx = index(hashPath, t.depth()) // 0..63
+	var nodeBit = uint64(1 << idx)       // idx is the slot
+	var bitMask = nodeBit - 1            // mask all bits below the idx'th bit
 
 	// Calculate the index into compressedTable.nodes[] for this entry
 	var i = BitCount64(t.nodeMap & bitMask)
@@ -674,7 +686,7 @@ func (t compressedTable) set(hashPath uint64, nn nodeI) tableI {
 
 			if BitCount64(nt.nodeMap) >= TABLE_CAPACITY/2 {
 				// promote compressedTable to fullTable
-				return NewFullTable(nt.depth, nt.hashPath, nt.entries())
+				return NewFullTable(nt.depth(), nt.hashPath, nt.entries())
 			}
 		} else /* if (t.nodeMap & nodeBit) > 0 */ {
 			// don't need to touch nt.nodeMap
@@ -704,7 +716,7 @@ func (t compressedTable) del(hash uint64) (tableI, nodeI) {
 
 type fullTable struct {
 	hashPath uint64 // depth*NBITS of hash to get to this location in the Trie
-	depth    uint
+	depth_   uint
 	nodeMap  uint64
 	nodes    [TABLE_CAPACITY]nodeI
 }
@@ -712,7 +724,7 @@ type fullTable struct {
 func NewFullTable(depth uint, hashPath uint64, tabEnts []tableEntry) tableI {
 	var ft = new(fullTable)
 	ft.hashPath = hashPath
-	ft.depth = depth
+	ft.depth_ = depth
 	//ft.nodeMap = 0 //unnecessary
 
 	for _, ent := range tabEnts {
@@ -724,6 +736,10 @@ func NewFullTable(depth uint, hashPath uint64, tabEnts []tableEntry) tableI {
 	return ft
 }
 
+func (t fullTable) depth() uint {
+	return t.depth_
+}
+
 // hashcode() is required for nodeI
 func (t fullTable) hashcode() uint64 {
 	return t.hashPath
@@ -733,7 +749,7 @@ func (t fullTable) hashcode() uint64 {
 func (t fullTable) copy() *fullTable {
 	var nt = new(fullTable)
 	nt.hashPath = t.hashPath
-	nt.depth = t.depth
+	nt.depth_ = t.depth_
 	nt.nodeMap = t.nodeMap
 	for i := 0; i < len(t.nodes); i++ {
 		nt.nodes[i] = t.nodes[i]
@@ -744,14 +760,14 @@ func (t fullTable) copy() *fullTable {
 // String() is required for nodeI
 func (t fullTable) String() string {
 	// fullTable{depth:%d hashPath:%s, nentries()=%d}
-	return fmt.Sprintf("fullTable{depth:%d, hashPath:%s, nentries()=%d}", t.depth, hashPathString(t.hashPath, t.depth), t.nentries())
+	return fmt.Sprintf("fullTable{depth:%d, hashPath:%s, nentries()=%d}", t.depth(), hashPathString(t.hashPath, t.depth()), t.nentries())
 }
 
 // LongString() is required for nodeI
 func (t fullTable) LongString(indent string) string {
 	var strs = make([]string, 3+len(t.nodes))
 
-	strs[0] = indent + fmt.Sprintf("fullTable{depth:%d, hashPath:%s, nentries()=%d", t.depth, hashPathString(t.hashPath, t.depth), t.nentries())
+	strs[0] = indent + fmt.Sprintf("fullTable{depth:%d, hashPath:%s, nentries()=%d", t.depth(), hashPathString(t.hashPath, t.depth()), t.nentries())
 
 	strs[1] = indent + "\tnodeMap=" + nodeMapString(t.nodeMap) + ","
 
@@ -797,7 +813,7 @@ func (t fullTable) entries() []tableEntry {
 
 // get(uint64) is required for tableI
 func (t fullTable) get(hashPath uint64) nodeI {
-	var idx = index(hashPath, t.depth)
+	var idx = index(hashPath, t.depth())
 	var nodeBit = uint64(1 << idx)
 
 	if (t.nodeMap & nodeBit) == 0 {
@@ -813,7 +829,7 @@ func (t fullTable) get(hashPath uint64) nodeI {
 func (t fullTable) set(hashPath uint64, nn nodeI) tableI {
 	var nt = t.copy()
 
-	var idx = index(hashPath, nt.depth)
+	var idx = index(hashPath, nt.depth())
 	var nodeBit = uint64(1 << idx)
 
 	if nn != nil {
@@ -824,7 +840,7 @@ func (t fullTable) set(hashPath uint64, nn nodeI) tableI {
 		nt.nodes[idx] = nn
 
 		if BitCount64(nt.nodeMap) < TABLE_CAPACITY/2 {
-			return DowngradeToCompressedTable(nt.depth, nt.hashPath, nt.entries())
+			return DowngradeToCompressedTable(nt.depth(), nt.hashPath, nt.entries())
 		}
 	}
 
