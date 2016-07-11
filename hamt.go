@@ -487,7 +487,7 @@ func NewCompressedTable(depth uint, h60 uint64, lf leafI) tableI {
 
 	var ct = new(compressedTable)
 	ct.hashPath = h60 & hashPathMask(depth)
-	ct.depth_ = depth
+	ct._depth = depth
 	ct.nodeMap = 1 << idx
 	ct.nodes = make([]nodeI, 1)
 	ct.nodes[0] = lf
@@ -500,7 +500,7 @@ func NewCompressedTable2(depth uint, hashPath uint64, leaf1 leafI, leaf2 flatLea
 
 	var retTable = new(compressedTable) // return compressedTable
 	retTable.hashPath = hashPath & hashPathMask(depth)
-	retTable.depth_ = depth
+	retTable._depth = depth
 
 	var curTable = retTable //*compressedTable
 	var d uint
@@ -531,7 +531,7 @@ func NewCompressedTable2(depth uint, hashPath uint64, leaf1 leafI, leaf2 flatLea
 
 		//newTable.hashPath = buildHashPath(hashPath, d+1, idx1)
 		newTable.hashPath = hashPath | uint64(idx1<<(d*NBITS))
-		newTable.depth_ = d + 1
+		newTable._depth = d + 1
 
 		curTable.nodeMap = 1 << idx1 //Set the idx1'th bit
 		curTable.nodes[0] = newTable
@@ -558,7 +558,7 @@ func NewCompressedTable2(depth uint, hashPath uint64, leaf1 leafI, leaf2 flatLea
 func DowngradeToCompressedTable(depth uint, hashPath uint64, ents []tableEntry) *compressedTable {
 	var nt = new(compressedTable)
 	nt.hashPath = hashPath
-	nt.depth_ = depth
+	nt._depth = depth
 	//nt.nodeMap = 0
 	nt.nodes = make([]nodeI, len(ents))
 
@@ -573,7 +573,7 @@ func DowngradeToCompressedTable(depth uint, hashPath uint64, ents []tableEntry) 
 }
 
 func (t compressedTable) depth() uint {
-	return t.depth_
+	return t._depth
 }
 
 func (t compressedTable) hashcode() uint64 {
@@ -583,7 +583,7 @@ func (t compressedTable) hashcode() uint64 {
 func (t compressedTable) copy() *compressedTable {
 	var nt = new(compressedTable)
 	nt.hashPath = t.hashPath
-	nt.depth_ = t.depth_
+	nt._depth = t._depth
 	nt.nodeMap = t.nodeMap
 	nt.nodes = append(nt.nodes, t.nodes...)
 	return nt
@@ -720,7 +720,7 @@ type fullTable struct {
 func NewFullTable(depth uint, hashPath uint64, tabEnts []tableEntry) tableI {
 	var ft = new(fullTable)
 	ft.hashPath = hashPath
-	ft.depth_ = depth
+	ft._depth = depth
 	//ft.nodeMap = 0 //unnecessary
 
 	for _, ent := range tabEnts {
@@ -733,7 +733,7 @@ func NewFullTable(depth uint, hashPath uint64, tabEnts []tableEntry) tableI {
 }
 
 func (t fullTable) depth() uint {
-	return t.depth_
+	return t._depth
 }
 
 // hashcode() is required for nodeI
@@ -745,7 +745,7 @@ func (t fullTable) hashcode() uint64 {
 func (t fullTable) copy() *fullTable {
 	var nt = new(fullTable)
 	nt.hashPath = t.hashPath
-	nt.depth_ = t.depth_
+	nt._depth = t._depth
 	nt.nodeMap = t.nodeMap
 	for i := 0; i < len(t.nodes); i++ {
 		nt.nodes[i] = t.nodes[i]
