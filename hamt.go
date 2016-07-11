@@ -96,9 +96,10 @@ func hashPathString(hashPath uint64, depth uint) string {
 
 	for i := depth; i > 0; i-- {
 		var idx = index(hashPath, i-1)
-		strs[i-1] = fmt.Sprintf("%06b", idx)
+		//strs[i-1] = fmt.Sprintf("%06b", idx)
+		strs[i-1] = fmt.Sprintf("%02d", idx)
 	}
-	return strings.Join(strs, " ")
+	return "/" + strings.Join(strs, "/")
 }
 
 func hash60String(h60 uint64) string {
@@ -162,7 +163,7 @@ func (h Hamt) String() string {
 func (h Hamt) LongString(indent string) string {
 	var str string
 	if h.root != nil {
-		str = indent + fmt.Sprintf("Hamt{ nentries: %d,\n", h.nentries)
+		str = indent + fmt.Sprintf("Hamt{ nentries: %d, root:\n", h.nentries)
 		str += indent + h.root.LongString(indent)
 		str += indent + "}"
 		return str
