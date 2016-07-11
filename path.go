@@ -7,12 +7,13 @@ import (
 
 type pathT []tableI
 
-//Constructs an empty pathT object.
+// Constructs an empty pathT object.
 func newPathT() pathT {
 	return pathT(make([]tableI, 0, MAXDEPTH))
 }
 
-//path.peek() return the last entry inter inserted with path.push(...).
+// path.peek() returns the last entry without inserted with path.push(...)
+// modifying path.
 func (path pathT) peek() tableI {
 	if len(path) == 0 {
 		return nil
@@ -20,7 +21,7 @@ func (path pathT) peek() tableI {
 	return path[len(path)-1]
 }
 
-//path.pop() returns & remmoves the last entry inserted with path.push(...).
+// path.pop() returns & remmoves the last entry inserted with path.push(...).
 func (path *pathT) pop() tableI {
 	if len(*path) == 0 {
 		//should I do this or let the runtime panic on index out of range
@@ -32,21 +33,21 @@ func (path *pathT) pop() tableI {
 
 }
 
-//Put a new tableI in the path object.
-//You should never push nil, but we are not checking to prevent this.
+// Put a new tableI in the path object.
+// You should never push nil, but we are not checking to prevent this.
 func (path *pathT) push(node tableI) {
 	//_ = ASSERT && Assert(node != nil, "pathT.push(nil) not allowed")
 	*path = append(*path, node)
 }
 
-//path.isEmpty() returns true if there are no entries in the path object,
-//otherwise it returns false.
+// path.isEmpty() returns true if there are no entries in the path object,
+// otherwise it returns false.
 func (path *pathT) isEmpty() bool {
 	return len(*path) == 0
 }
 
-//Convert path to a string representation. This is only good for debug messages.
-//It is not a string format to convert back from.
+// Convert path to a string representation. This is only good for debug messages.
+// It is not a string format to convert back from.
 func (path *pathT) String() string {
 	s := "["
 	pvs := []tableI(*path)
