@@ -92,7 +92,6 @@ func hashPathString(hashPath uint64, depth uint) string {
 	if depth == 0 {
 		return "0"
 	}
-
 	var strs = make([]string, depth)
 
 	for i := depth; i > 0; i-- {
@@ -286,15 +285,8 @@ func (h Hamt) Put(key []byte, val interface{}) (nh *Hamt, inserted bool) {
 	var curTable = h.root
 
 	for depth = 0; depth < MAXDEPTH; depth++ {
-		// ASSERT curTable.depth == depth
-		//		ASSERT(curTable.depth() == depth,
-		//			fmt.Sprintf("curTable.depth() is not on the same level as we are operating on. curTable.depth(),%d != depth,%d\ncurTable=\n%s", curTable.depth(), depth, curTable))
-
 		var curNode = curTable.get(h60)
 
-		/***********************************************
-		 * If the table entry is empty, insert a leaf. *
-		 ***********************************************/
 		if curNode == nil {
 			var newTable = curTable.set(h60, newLeaf)
 			nh.nentries++
@@ -302,20 +294,10 @@ func (h Hamt) Put(key []byte, val interface{}) (nh *Hamt, inserted bool) {
 			return nh, true
 		}
 
-		/**********************************
-		 * If the table entry ISA leaf... *
-		 **********************************/
 		if oldLeaf, ok := curNode.(leafI); ok {
 
-			/**************************************************************
-			 * ...AND hashcode COLLISION. Either we are part of
-			 * the way down to MAXDEPTH and part of the hashcode matches,
-			 * or we are at MAXDEPTH and 60 of 64 bits match.
-			 **************************************************************/
 			if oldLeaf.hashcode() == h60 {
 				Lgr.Printf("HOLY SHIT!!! Two keys collided with this same hash60 orig key=\"%s\" new key=\"%s\" h60=0x%016x", oldLeaf.(flatLeaf).key, key, h60)
-				//if oldLeaf is a flatLeaf this will promote it to a
-				// collisionLeaf, else it already is a collisionLeaf.
 
 				var newLeaf leafI
 				newLeaf, inserted = oldLeaf.put(key, val)
@@ -330,14 +312,31 @@ func (h Hamt) Put(key []byte, val interface{}) (nh *Hamt, inserted bool) {
 
 			var newLeaf = NewFlatLeaf(h60, key, val)
 
-			// Two leafs into one slot requires a new Table with those two leafs
-			// to be put into that slot.
-			var hashPath = h60 & hashPathMask(depth)
+			var hashPath = h60 & hashPathMask(depth+1)
 
-			// Table from the collision of two leaves
 			collisionTable := NewCompressedTable2(depth+1, hashPath, oldLeaf, *newLeaf)
 
 			newTable := curTable.set(h60, collisionTable)
+
+			// SANITY TEST
+			// checking oldLeaf & newLeaf share the same hashPath upto depth+1
+			var tmpHashPath uint64
+			for i := uint(0); i < depth+1; i++ {
+				idx1 := index(oldLeaf.hashcode(), i)
+				idx2 := index(newLeaf.hashcode(), i)
+				if idx1 != idx2 {
+					//tmpHashPath1 := tmpHashPath | uint64(idx1<<i*NBITS)
+					//tmpHashPath2 := tmpHashPath | uint64(idx2<<i*NBITS)
+					Lgr.Printf("h=\n%s", h.LongString(""))
+					Lgr.Printf("collisionTable=\n%s", collisionTable.LongString(""))
+					Lgr.Printf("curTable=\n%s", curTable.LongString(""))
+					Lgr.Printf("newTable=\n%s", newTable.LongString(""))
+					Lgr.Printf("idx1=%d; idx2=%d", idx1, idx2)
+					Lgr.Printf("depth+1=%d; i=%d", depth+1, i)
+					Lgr.Panicf("attempted to call NewCompressedTable2 with two leaves with diffent hashPaths; oldLeaf=%s newLeaf=%s", oldLeaf, newLeaf)
+				}
+				tmpHashPath |= uint64(idx1 << (i * NBITS))
+			}
 
 			nh.nentries++
 			nh.copyUp(curTable, newTable, path)
@@ -346,9 +345,7 @@ func (h Hamt) Put(key []byte, val interface{}) (nh *Hamt, inserted bool) {
 
 		path.push(curTable)
 
-		/***********************************
-		 * The tale entry MUST BE A tableI *
-		 ***********************************/
+		// The table entry is NOT NIL & NOT LeafI THEREFOR MUST BE a tableI
 		curTable = curNode.(tableI)
 
 	} //end: for
@@ -499,8 +496,6 @@ func NewCompressedTable(depth uint, h60 uint64, lf leafI) tableI {
 
 func NewCompressedTable2(depth uint, hashPath uint64, leaf1 leafI, leaf2 flatLeaf) tableI {
 	//ASSERT(depth < MAXDEPTH+1, "uint parameter 0 >= depth >= 9")
-
-	hashPath = leaf1.hashcode() & hashPathMask(depth)
 
 	var retTable = new(compressedTable) // return compressedTable
 	retTable.hashPath = hashPath & hashPathMask(depth)
