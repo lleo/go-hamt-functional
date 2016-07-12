@@ -319,25 +319,25 @@ func (h Hamt) Put(key []byte, val interface{}) (nh *Hamt, inserted bool) {
 
 			newTable := curTable.set(h60, collisionTable)
 
-			// // SANITY TEST
-			// // checking oldLeaf & newLeaf share the same hashPath upto depth+1
-			// var tmpHashPath uint64
-			// for i := uint(0); i < depth+1; i++ {
-			// 	idx1 := index(oldLeaf.hashcode(), i)
-			// 	idx2 := index(newLeaf.hashcode(), i)
-			// 	if idx1 != idx2 {
-			// 		//tmpHashPath1 := tmpHashPath | uint64(idx1<<i*NBITS)
-			// 		//tmpHashPath2 := tmpHashPath | uint64(idx2<<i*NBITS)
-			// 		Lgr.Printf("h=\n%s", h.LongString(""))
-			// 		Lgr.Printf("collisionTable=\n%s", collisionTable.LongString(""))
-			// 		Lgr.Printf("curTable=\n%s", curTable.LongString(""))
-			// 		Lgr.Printf("newTable=\n%s", newTable.LongString(""))
-			// 		Lgr.Printf("idx1=%d; idx2=%d", idx1, idx2)
-			// 		Lgr.Printf("depth+1=%d; i=%d", depth+1, i)
-			// 		Lgr.Panicf("attempted to call NewCompressedTable2 with two leaves with diffent hashPaths; oldLeaf=%s newLeaf=%s", oldLeaf, newLeaf)
-			// 	}
-			// 	tmpHashPath |= uint64(idx1 << (i * NBITS))
-			// }
+			// SANITY TEST
+			// checking oldLeaf & newLeaf share the same hashPath upto depth+1
+			var tmpHashPath uint64
+			for i := uint(0); i < depth+1; i++ {
+				idx1 := index(oldLeaf.hashcode(), i)
+				idx2 := index(newLeaf.hashcode(), i)
+				if idx1 != idx2 {
+					//tmpHashPath1 := tmpHashPath | uint64(idx1<<i*NBITS)
+					//tmpHashPath2 := tmpHashPath | uint64(idx2<<i*NBITS)
+					Lgr.Printf("h=\n%s", h.LongString(""))
+					Lgr.Printf("collisionTable=\n%s", collisionTable.LongString(""))
+					Lgr.Printf("curTable=\n%s", curTable.LongString(""))
+					Lgr.Printf("newTable=\n%s", newTable.LongString(""))
+					Lgr.Printf("idx1=%d; idx2=%d", idx1, idx2)
+					Lgr.Printf("depth+1=%d; i=%d", depth+1, i)
+					Lgr.Panicf("attempted to call NewCompressedTable2 with two leaves with diffent hashPaths; oldLeaf=%s newLeaf=%s", oldLeaf, newLeaf)
+				}
+				tmpHashPath |= uint64(idx1 << (i * NBITS))
+			}
 
 			nh.nentries++
 			nh.copyUp(curTable, newTable, path)
@@ -470,7 +470,7 @@ type tableI interface {
 //
 type compressedTable struct {
 	hashPath uint64 // depth*NBITS of hash to get to this location in the Trie
-	depth_   uint
+	_depth   uint
 	nodeMap  uint64
 	nodes    []nodeI
 }
@@ -712,7 +712,7 @@ func (t compressedTable) del(hash uint64) (tableI, nodeI) {
 
 type fullTable struct {
 	hashPath uint64 // depth*NBITS of hash to get to this location in the Trie
-	depth_   uint
+	_depth   uint
 	nodeMap  uint64
 	nodes    [TABLE_CAPACITY]nodeI
 }
