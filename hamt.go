@@ -88,16 +88,21 @@ func hashPathMask(depth uint) uint64 {
 	return uint64(1<<((depth)*NBITS)) - 1
 }
 
+// Create a string of the form "/%02d/%02d..." to describe a hashPath of
+// a given depth.
+//
+// If you want hashPathStrig() to include the current idx, you Must
+// add one to depth. You may need to do this because you are creating
+// a table to be put at the idx'th slot of the current table.
 func hashPathString(hashPath uint64, depth uint) string {
 	if depth == 0 {
-		return "0"
+		return ""
 	}
 	var strs = make([]string, depth)
 
-	for i := depth; i > 0; i-- {
-		var idx = index(hashPath, i-1)
-		//strs[i-1] = fmt.Sprintf("%06b", idx)
-		strs[i-1] = fmt.Sprintf("%02d", idx)
+	for d := depth; d > 0; d-- {
+		var idx = index(hashPath, d-1)
+		strs[d-1] = fmt.Sprintf("%02d", idx)
 	}
 	return "/" + strings.Join(strs, "/")
 }
