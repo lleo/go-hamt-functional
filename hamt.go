@@ -141,17 +141,9 @@ func index(h60 uint64, depth uint) uint {
 	return idx
 }
 
-//buildHashPath()
-func buildHashPath(hashPath uint64, depth, idx uint) uint64 {
-	// This code is not valid where idx == 0 for each depth
-	/*
-		hashPathMask_ := hashPathMask(depth)
-		if ((hashPath & hashPathMask_) - 1) > 0 {
-			panic("hashPath > depth")
-		}
-	*/
-
-	return hashPath & uint64(idx<<(depth*NBITS))
+//buildHashPath(hashPath, idx, depth)
+func buildHashPath(hashPath uint64, idx, depth uint) uint64 {
+	return hashPath | uint64(idx<<(depth*NBITS))
 }
 
 type Hamt struct {
