@@ -80,9 +80,9 @@ func hashPathEqual(depth uint, a, b uint64) bool {
 	return (a & pathMask) == (b & pathMask)
 }
 
-func makeHashPath(depth uint, hash uint64) uint64 {
-	return hash & hashPathMask(depth)
-}
+//func makeHashPath(h60 uint64, depth uint) uint64 {
+//	return hash & hashPathMask(depth)
+//}
 
 func hashPathMask(depth uint) uint64 {
 	return uint64(1<<((depth)*NBITS)) - 1
