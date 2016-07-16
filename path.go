@@ -1,9 +1,6 @@
 package hamt
 
-import (
-	"fmt"
-	"strings"
-)
+import "strings"
 
 type pathT []tableI
 
@@ -53,7 +50,7 @@ func (path *pathT) String() string {
 	pvs := []tableI(*path)
 	strs := make([]string, 0, 2)
 	for _, pv := range pvs {
-		strs = append(strs, fmt.Sprintf("%p", pv))
+		strs = append(strs, pv.String())
 	}
 	s += strings.Join(strs, " ")
 	s += "]"
