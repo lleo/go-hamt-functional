@@ -8,7 +8,7 @@ Mapped Trie.
 There is a lot of Jargon in there to be unpacked. This library can be imported
 into a Go language program with the following golang import statements:
 
-	import hamt "github.com/lleo/hamt-functional"
+	import hamt "github.com/lleo/go-hamt-functional"
 
 The term, "persistent", means that any modification to the datastructure does
 not change the original datastructure. Rather, a new top level data structure
