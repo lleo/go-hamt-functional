@@ -42,7 +42,7 @@ var hugeNumEnts []keyVal
 func TestMain(m *testing.M) {
 	// SETUP
 
-	var logFile, err = os.OpenFile("test.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0755)
+	var logFile, err = os.OpenFile("test.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -52,7 +52,7 @@ func TestMain(m *testing.M) {
 	midNumEnts = make([]keyVal, 0, 32)
 	var s0 = util.Str("")
 	//nEnts := 10000 //ten thousand
-	var midEnts = 1000
+	var midEnts = 1000 // 10 million
 	for i := 0; i < midEnts; i++ {
 		s0 = s0.Inc(1) //get off "" first
 		var key = []byte(s0)
@@ -63,7 +63,7 @@ func TestMain(m *testing.M) {
 	hugeNumEnts = make([]keyVal, 0, 32)
 	var s1 = util.Str("")
 	//var hugeEnts = 1024
-	var hugeEnts = 32 * 1024
+	var hugeEnts = 1024 * 1024
 	//var hugeEnts = 256 * 1024 * 1024 //256 MB
 	for i := 0; i < hugeEnts; i++ {
 		s1 = s1.Inc(1)
@@ -80,7 +80,7 @@ func TestMain(m *testing.M) {
 	os.Exit(xit)
 }
 
-func dTestEmptyPutDelCrazy(t *testing.T) {
+func TestEmptyPutDelCrazy(t *testing.T) {
 	var key = []byte("aaaaaaaaaaaaaaaaaaaaaabbcdefghijkl")
 	var val = 14126
 	var h = &EMPTY
@@ -128,7 +128,7 @@ func TestEmptyPutThriceFlatGetThrice(t *testing.T) {
 		h, _ = h.Put(keys[i], vals[i])
 	}
 
-	t.Logf("h.root =\n%s", h.root.LongString(""))
+	t.Logf("h =\n%s", h.LongString(""))
 
 	for i := range vals {
 		var val, found = h.Get(keys[i])
@@ -149,7 +149,7 @@ func TestPutGetTwoTableDeepCollision(t *testing.T) {
 	h, _ = h.Put([]byte("d"), 4)
 	h, _ = h.Put([]byte("aa"), 27)
 
-	t.Log("h.root =\n%s", h.root.LongString(""))
+	t.Log("h =\n%s", h.LongString(""))
 
 	var val interface{}
 	var found bool
@@ -360,7 +360,7 @@ func TestEmptyPutManyDelManyIsEmpty(t *testing.T) {
 		h, _ = h.Put(key, val)
 	}
 
-	t.Log("h.root =\n", h.root.LongString(""))
+	t.Log("h =\n", h.LongString(""))
 
 	for i := 0; i < 64; i++ {
 		var key = midNumEnts[i].key
@@ -370,17 +370,13 @@ func TestEmptyPutManyDelManyIsEmpty(t *testing.T) {
 		var deleted bool
 		h, val, deleted = h.Del(key)
 		if !deleted {
-			t.Errorf("Did NOT find&delete for key=\"%s\"", key)
+			t.Fatalf("Did NOT find&delete for key=\"%s\"; hence h no longer valid", key)
 		}
 		if val != expected_val {
 			t.Errorf("val,%d != expected_val,%d", val, expected_val)
 		}
 
-		if h.root == nil {
-			t.Log("h.root == nil")
-		} else {
-			t.Log("h.root ==\n", h.root.LongString(""))
-		}
+		t.Log("h =\n", h.LongString(""))
 	}
 	t.Log("### Testing compressedTable Shrinkage ###")
 
@@ -398,8 +394,7 @@ func TestEmptyPutDelTrumpIsEmpty(t *testing.T) {
 		h, _ = h.Put(hugeNumEnts[i].key, hugeNumEnts[i].val)
 	}
 
-	Lgr.Println("h.root =")
-	Lgr.Println(h.root.LongString(""))
+	//Lgr.Println("TEST: h = ", h.LongString(""))
 
 	for i := 0; i < len(hugeNumEnts); i++ {
 		var key = hugeNumEnts[i].key
@@ -407,17 +402,20 @@ func TestEmptyPutDelTrumpIsEmpty(t *testing.T) {
 
 		var val interface{}
 		var deleted bool
-		h, val, deleted = h.Del(key)
+		var h1 *Hamt
+		h1, val, deleted = h.Del(key)
 		if !deleted {
 			t.Errorf("Did NOT find&delete for key=\"%s\"", key)
 		}
 		if val != expected_val {
 			t.Errorf("val,%d != expected_val,%d", val, expected_val)
 		}
+		h = h1
 	}
 	//t.Log("### Testing compressedTable Shrinkage ###")
 
 	if !h.IsEmpty() {
+		Lgr.Println("TestEmptyPutDelTrumpIsEmpty Failed cur !h.IsEmpty()")
 		Lgr.Println(h.LongString(""))
 		t.Fatal("NOT h.IsEmpty()")
 	}
