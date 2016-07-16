@@ -4,7 +4,7 @@ import (
 	"flag"
 	"fmt"
 
-	hamt "github.com/lleo/hamt-functional"
+	hamt "github.com/lleo/go-hamt-functional"
 )
 
 func main() {
