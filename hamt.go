@@ -69,6 +69,8 @@ func hash64(bs []byte) uint64 {
 	return h.Sum64()
 }
 
+// Creatig non-64bit hash from:
+// http://www.isthe.com/chongo/tech/comp/fnv/index.html#xor-fold
 func hash60(bs []byte) uint64 {
 	var h64 = hash64(bs)
 	return (h64 >> 60) ^ (h64 & mask60)
@@ -483,7 +485,7 @@ func newCompressedTable2(depth uint, hashPath uint64, l1 leafI, l2 flatLeaf) tab
 }
 
 func NewCompressedTable(depth uint, h60 uint64, lf leafI) tableI {
-	ASSERT(lf.hashcode() == h60, "NewCompressedTable(): lf.hashcode() != h60")
+	//ASSERT(lf.hashcode() == h60, "NewCompressedTable(): lf.hashcode() != h60")
 
 	var idx = index(h60, depth)
 
