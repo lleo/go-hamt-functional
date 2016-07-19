@@ -36,25 +36,6 @@ type compressedTable struct {
 	nodes    []nodeI
 }
 
-type tableEntry struct {
-	idx  uint //Note-to-self: this implicitly assumes a given depth! Hmmm!?!?
-	node nodeI
-}
-
-func buildCompressedTable(depth uint, hashPath uint64, nodes []nodeI) tableI {
-	var ft = buildFullTable(depth, hashPath, nodes)
-	var ct = DowngradeToCompressedTable(hashPath, ft.entries())
-	return ct
-}
-
-func newCompressedTable(depth uint, hashPath uint64, l leafI) tableI {
-	return buildCompressedTable(depth, hashPath, []nodeI{l})
-}
-
-func newCompressedTable2(depth uint, hashPath uint64, l1 leafI, l2 flatLeaf) tableI {
-	return buildCompressedTable(depth, hashPath, []nodeI{l1, l2})
-}
-
 func NewCompressedTable(depth uint, h60 uint64, lf leafI) tableI {
 	//ASSERT(lf.hashcode() == h60, "NewCompressedTable(): lf.hashcode() != h60")
 
@@ -250,7 +231,7 @@ func (t compressedTable) set(idx uint, nn nodeI) tableI {
 
 			if BitCount64(nt.nodeMap) >= TABLE_CAPACITY/2 {
 				// promote compressedTable to fullTable
-				return NewFullTable(nt.hashPath, nt.entries())
+				return UpgradeToFullTable(nt.hashPath, nt.entries())
 			}
 		} else /* if (t.nodeMap & nodeBit) > 0 */ {
 			// don't need to touch nt.nodeMap
