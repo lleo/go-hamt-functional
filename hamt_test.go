@@ -2,74 +2,65 @@ package hamt
 
 import (
 	"log"
+	"math/rand"
 	"os"
 	"testing"
 
-	"github.com/lleo/util"
+	"github.com/lleo/stringutil"
 )
 
-type entry struct {
-	hashPath []uint8
-	hash     uint64
-	key      []byte
-	val      interface{}
-}
+var genRandomizedKvs func(kvs []keyVal) []keyVal
 
-var TEST_SET_1 = []entry{
-	{hash: path2hash([]uint8{1, 2, 3}), key: []byte("foo"), val: 1},
-	{hash: path2hash([]uint8{1, 2, 1}), key: []byte("foo"), val: 1},
-}
+var numMidKvs int
+var numHugeKvs int
+var midKvs []keyVal
+var hugeKvs []keyVal
 
-//func printHash(hash uint64) {
-//	top4 := ^uint64(1<<60 - 1)
-//}
-
-//func addToHashPath(hashPath uint64, depth int, val uint8) uint64 {
-//	return hashPath & uint64(val << (depth * NBITS))
-//}
-
-func path2hash(path []uint8) uint64 {
-	var hashPath uint64
-	for depth, val := range path {
-		hashPath &= uint64(val << (uint(depth) * NBITS))
-	}
-	return hashPath
-}
-
-var midNumEnts []keyVal
-var hugeNumEnts []keyVal
+var M map[string]int
+var H *Hamt
 
 func TestMain(m *testing.M) {
 	// SETUP
+	genRandomizedKvs = genRandomizedKvsInPlace
 
 	var logFile, err = os.OpenFile("test.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer logFile.Close()
-	Lgr.SetOutput(logFile)
+	//Lgr.SetOutput(logFile)
 
-	midNumEnts = make([]keyVal, 0, 32)
-	var s0 = util.Str("")
-	//nEnts := 10000 //ten thousand
-	var midEnts = 1000 // 10 million
-	for i := 0; i < midEnts; i++ {
-		s0 = s0.Inc(1) //get off "" first
+	midKvs = make([]keyVal, 0, 32)
+	var s0 = stringutil.Str("aaa")
+	//numMidKvs := 10000 //ten thousand
+	numMidKvs = 1000 // 10 million
+	for i := 0; i < numMidKvs; i++ {
 		var key = []byte(s0)
 		var val = i + 1
-		midNumEnts = append(midNumEnts, keyVal{key, val})
+		midKvs = append(midKvs, keyVal{key, val})
+		s0 = s0.DigitalInc(1) //get off "" first
 	}
 
-	hugeNumEnts = make([]keyVal, 0, 32)
-	var s1 = util.Str("")
-	//var hugeEnts = 1024
-	var hugeEnts = 1024 * 1024
-	//var hugeEnts = 256 * 1024 * 1024 //256 MB
-	for i := 0; i < hugeEnts; i++ {
-		s1 = s1.Inc(1)
+	hugeKvs = make([]keyVal, 0, 32)
+	var s1 = stringutil.Str("aaa")
+	//numHugeKvs = 1024
+	numHugeKvs = 1 * 1024 * 1024 // one mega-entries
+	//numHugeKvs = 256 * 1024 * 1024 //256 MB
+	for i := 0; i < numHugeKvs; i++ {
 		var key = []byte(s1)
 		var val = i + 1
-		hugeNumEnts = append(hugeNumEnts, keyVal{key, val})
+		hugeKvs = append(hugeKvs, keyVal{key, val})
+		s1 = s1.DigitalInc(1)
+	}
+
+	// Build map & hamt
+	M = make(map[string]int)
+	H = &EMPTY
+	var s = stringutil.Str("aaa")
+	for i := 0; i < numHugeKvs; i++ {
+		M[string(s)] = i + 1
+		H, _ = H.Put([]byte(s), i+1)
+		s = s.DigitalInc(1)
 	}
 
 	// RUN
@@ -78,6 +69,21 @@ func TestMain(m *testing.M) {
 	// TEARDOW
 
 	os.Exit(xit)
+}
+
+//First genRandomizedKvs() copies []keyVal passed in. Then it randomizes that
+//copy in-place. Finnally, it returns the randomized copy.
+func genRandomizedKvsInPlace(kvs []keyVal) []keyVal {
+	randKvs := make([]keyVal, len(kvs))
+	copy(randKvs, kvs)
+
+	//From: https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle#The_modern_algorithm
+	for i := len(randKvs) - 1; i > 0; i-- {
+		j := rand.Intn(i + 1)
+		randKvs[i], randKvs[j] = randKvs[j], randKvs[i]
+	}
+
+	return randKvs
 }
 
 func TestEmptyPutDelCrazy(t *testing.T) {
@@ -177,14 +183,14 @@ func TestEmptyPutManyGetMany(t *testing.T) {
 	var h = &EMPTY
 
 	for i := 0; i < 64; i++ {
-		var key = midNumEnts[i].key
-		var val = midNumEnts[i].val
+		var key = midKvs[i].key
+		var val = midKvs[i].val
 		h, _ = h.Put(key, val)
 	}
 
 	for i := 0; i < 64; i++ {
-		var key = midNumEnts[i].key
-		var expected_val = midNumEnts[i].val
+		var key = midKvs[i].key
+		var expected_val = midKvs[i].val
 
 		var val, found = h.Get(key)
 		if !found {
@@ -355,16 +361,16 @@ func TestEmptyPutManyDelManyIsEmpty(t *testing.T) {
 	var h = &EMPTY
 
 	for i := 0; i < 64; i++ {
-		var key = midNumEnts[i].key
-		var val = midNumEnts[i].val
+		var key = midKvs[i].key
+		var val = midKvs[i].val
 		h, _ = h.Put(key, val)
 	}
 
 	t.Log("h =\n", h.LongString(""))
 
 	for i := 0; i < 64; i++ {
-		var key = midNumEnts[i].key
-		var expected_val = midNumEnts[i].val
+		var key = midKvs[i].key
+		var expected_val = midKvs[i].val
 
 		var val interface{}
 		var deleted bool
@@ -390,15 +396,15 @@ func TestEmptyPutManyDelManyIsEmpty(t *testing.T) {
 func TestEmptyPutDelTrumpIsEmpty(t *testing.T) {
 	var h = &EMPTY
 
-	for i := 0; i < len(hugeNumEnts); i++ {
-		h, _ = h.Put(hugeNumEnts[i].key, hugeNumEnts[i].val)
+	for i := 0; i < numHugeKvs; i++ {
+		h, _ = h.Put(hugeKvs[i].key, hugeKvs[i].val)
 	}
 
 	//Lgr.Println("TEST: h = ", h.LongString(""))
 
-	for i := 0; i < len(hugeNumEnts); i++ {
-		var key = hugeNumEnts[i].key
-		var expected_val = hugeNumEnts[i].val
+	for i := 0; i < numHugeKvs; i++ {
+		var key = hugeKvs[i].key
+		var expected_val = hugeKvs[i].val
 
 		var val interface{}
 		var deleted bool
@@ -415,14 +421,57 @@ func TestEmptyPutDelTrumpIsEmpty(t *testing.T) {
 	//t.Log("### Testing compressedTable Shrinkage ###")
 
 	if !h.IsEmpty() {
-		Lgr.Println("TestEmptyPutDelTrumpIsEmpty Failed cur !h.IsEmpty()")
-		Lgr.Println(h.LongString(""))
+		//Lgr.Println("TestEmptyPutDelTrumpIsEmpty Failed cur !h.IsEmpty()")
+		//Lgr.Println(h.LongString(""))
 		t.Fatal("NOT h.IsEmpty()")
 	}
 }
 
-// collided depth 3:
-//     "b",2 & "rstuvvw",670
-//     "gg",39 & "yzz",152     <=== I like this one
-//     "mm",51 & "efggh",283
-//     "stt",169 & "abcddefgh",940
+//func TestMapPut(t *testing.T) {
+//	var m = make(map[string]int)
+//	for i := 0; i < numHugeKvs; i++ {
+//		m[string(hugeKvs[i].key)] = i + 1
+//	}
+//}
+//
+//func TestHamtPut(t *testing.T) {
+//	var h = &EMPTY
+//	for i := 0; i < numHugeKvs; i++ {
+//		h, _ = h.Put(hugeKvs[i].key, i+1)
+//	}
+//}
+
+func BenchmarkMapGet(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		var j = int(rand.Int31()) % numHugeKvs
+		var s = string(hugeKvs[j].key)
+		var v = M[s]
+		v += 1
+	}
+}
+
+func BenchmarkHamtGet(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		var j = int(rand.Int31()) % numHugeKvs
+		var k = hugeKvs[j].key
+		var _, _ = H.Get(k)
+	}
+}
+
+func BenchmarkMapPut(b *testing.B) {
+	var m = make(map[string]int)
+	var s = stringutil.Str("aaa")
+	for i := 0; i < b.N; i++ {
+		m[string(s)] = i + 1
+		s = s.DigitalInc(1)
+	}
+}
+
+func BenchmarkHamtPut(b *testing.B) {
+	var h = &EMPTY
+	var s = stringutil.Str("aaa")
+	for i := 0; i < b.N; i++ {
+		h, _ = h.Put([]byte(s), i+1)
+		s = s.DigitalInc(1)
+	}
+}
