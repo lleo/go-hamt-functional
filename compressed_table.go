@@ -80,7 +80,6 @@ func newCompressedTable2(depth uint, hashPath uint64, leaf1 leafI, leaf2 flatLea
 		var newTable = new(compressedTable)
 
 		newTable.hashPath = buildHashPath(hashPath, idx1, d)
-		//newTable.hashPath = hashPath | uint64(idx1<<(d*NBITS64))
 
 		curTable.nodeMap = 1 << idx1 //Set the idx1'th bit
 		curTable.nodes[0] = newTable
