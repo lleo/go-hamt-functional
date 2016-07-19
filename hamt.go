@@ -247,7 +247,7 @@ func (h Hamt) Put(key []byte, val interface{}) (nh *Hamt, inserted bool) {
 	var newLeaf = NewFlatLeaf(h60, key, val)
 
 	if h.IsEmpty() {
-		nh.root = NewCompressedTable(depth, h60, newLeaf)
+		nh.root = newCompressedTable(depth, h60, newLeaf)
 		nh.nentries++
 		return nh, true
 	}
@@ -290,35 +290,13 @@ func (h Hamt) Put(key []byte, val interface{}) (nh *Hamt, inserted bool) {
 			// idx onto hashPath, you must add +1 to the depth.
 			hashPath = buildHashPath(hashPath, idx, depth)
 
-			// // SANITY CHECK
-			// if hashPath != h60&hashPathMask(depth+1) {
-			// 	Lgr.Panicf("h.Put(%q, %v): idx=%d; hashPath != h60&hashPathMask(depth+1); depth=%d; hashPath=%s; h60=%s; hashPathMask(depth+1)=%s", key, val, idx, depth, hashPathString(hashPath, depth+1), hash60String(h60), hash60String(hashPathMask(depth+1)))
-			// }
-
 			var newLeaf = NewFlatLeaf(h60, key, val)
 
 			//Can I calculate the hashPath from path? Should I go there? ;}
 
-			collisionTable := NewCompressedTable2(depth+1, hashPath, oldLeaf, *newLeaf)
+			collisionTable := newCompressedTable2(depth+1, hashPath, oldLeaf, *newLeaf)
 
 			newTable := curTable.set(idx, collisionTable)
-
-			// // SANITY TEST
-			// // checking oldLeaf & newLeaf share the same hashPath upto depth+1
-			// var tmpHashPath uint64
-			// for i := uint(0); i < depth+1; i++ {
-			// 	idx1 := index(oldLeaf.hashcode(), i)
-			// 	idx2 := index(newLeaf.hashcode(), i)
-			// 	if idx1 != idx2 {
-			// 		Lgr.Printf("collisionTable=\n%s", collisionTable.LongString("", depth+1))
-			// 		Lgr.Printf("curTable=\n%s", curTable.LongString("", depth))
-			// 		Lgr.Printf("newTable=\n%s", newTable.LongString("", depth))
-			// 		Lgr.Printf("idx1=%d; idx2=%d", idx1, idx2)
-			// 		Lgr.Printf("depth+1=%d; i=%d", depth+1, i)
-			// 		Lgr.Panicf("attempted to call NewCompressedTable2 with two leaves with diffent hashPaths; oldLeaf=%s newLeaf=%s", oldLeaf, newLeaf)
-			// 	}
-			// 	tmpHashPath |= uint64(idx1 << (i * NBITS))
-			// }
 
 			nh.nentries++
 			nh.copyUp(curTable, newTable, path)

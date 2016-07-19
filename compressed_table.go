@@ -36,13 +36,11 @@ type compressedTable struct {
 	nodes    []nodeI
 }
 
-func NewCompressedTable(depth uint, h60 uint64, lf leafI) tableI {
-	//ASSERT(lf.hashcode() == h60, "NewCompressedTable(): lf.hashcode() != h60")
-
-	var idx = index(h60, depth)
+func newCompressedTable(depth uint, hashPath uint64, lf leafI) tableI {
+	var idx = index(hashPath, depth)
 
 	var ct = new(compressedTable)
-	ct.hashPath = h60 & hashPathMask(depth)
+	ct.hashPath = hashPath & hashPathMask(depth)
 	ct.nodeMap = 1 << idx
 	ct.nodes = make([]nodeI, 1)
 	ct.nodes[0] = lf
@@ -50,13 +48,11 @@ func NewCompressedTable(depth uint, h60 uint64, lf leafI) tableI {
 	return ct
 }
 
-func NewCompressedTable2(depth uint, hashPath uint64, leaf1 leafI, leaf2 flatLeaf) tableI {
-	//ASSERT(depth <= MAXDEPTH, "depth >= MAXDEPTH,9")
-
-	var retTable = new(compressedTable) // return compressedTable
+func newCompressedTable2(depth uint, hashPath uint64, leaf1 leafI, leaf2 flatLeaf) tableI {
+	var retTable = new(compressedTable)
 	retTable.hashPath = hashPath & hashPathMask(depth)
 
-	var curTable = retTable //*compressedTable
+	var curTable = retTable
 	var d uint
 	for d = depth; d < MAXDEPTH; d++ {
 		var idx1 = index(leaf1.hashcode(), d)

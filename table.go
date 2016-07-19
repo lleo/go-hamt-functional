@@ -41,7 +41,7 @@ type tableI interface {
 }
 
 type tableEntry struct {
-	idx  uint //Note-to-self: this implicitly assumes a given depth! Hmmm!?!?
+	idx  uint
 	node nodeI
 }
 
