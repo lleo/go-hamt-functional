@@ -1,4 +1,4 @@
-package hamt
+package hamt_functional
 
 import (
 	"fmt"
@@ -31,7 +31,7 @@ import (
 // there is a function to calculate the index called index(hash, depth);
 //
 type compressedTable struct {
-	hashPath uint64 // depth*NBITS of hash to get to this location in the Trie
+	hashPath uint64 // depth*NBITS64 of hash to get to this location in the Trie
 	nodeMap  uint64
 	nodes    []nodeI
 }
@@ -79,8 +79,8 @@ func newCompressedTable2(depth uint, hashPath uint64, leaf1 leafI, leaf2 flatLea
 
 		var newTable = new(compressedTable)
 
-		//newTable.hashPath = buildHashPath(hashPath, idx1, d+1)
-		newTable.hashPath = hashPath | uint64(idx1<<(d*NBITS))
+		newTable.hashPath = buildHashPath(hashPath, idx1, d)
+		//newTable.hashPath = hashPath | uint64(idx1<<(d*NBITS64))
 
 		curTable.nodeMap = 1 << idx1 //Set the idx1'th bit
 		curTable.nodes[0] = newTable

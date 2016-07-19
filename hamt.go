@@ -22,7 +22,7 @@ We use go's "hash/fnv" FNV1 implementation for the hash.
 Typically HAMT's can be implemented in 64/6 bit and 32/5 bit versions. I've
 implemented this as a 64/6 bit version.
 */
-package hamt
+package hamt_functional
 
 import (
 	"fmt"
@@ -37,10 +37,10 @@ var Lgr = log.New(os.Stderr, "[hamt] ", log.Lshortfile)
 // The number of bits to partition the hashcode and to index each table. By
 // logical necessity this MUST be 6 bits because 2^6 == 64; the number of
 // entries in a table.
-const NBITS uint = 6
+const NBITS64 uint = 6
 
 // The Capacity of a table; 2^6 == 64;
-const TABLE_CAPACITY uint = 1 << NBITS
+const TABLE_CAPACITY uint = 1 << NBITS64
 
 const mask60 = 1<<60 - 1
 
@@ -77,7 +77,7 @@ func hash60(bs []byte) uint64 {
 }
 
 func hashPathEqual(depth uint, a, b uint64) bool {
-	pathMask := uint64(1<<(depth*NBITS)) - 1
+	pathMask := uint64(1<<(depth*NBITS64)) - 1
 
 	return (a & pathMask) == (b & pathMask)
 }
@@ -87,7 +87,7 @@ func hashPathEqual(depth uint, a, b uint64) bool {
 //}
 
 func hashPathMask(depth uint) uint64 {
-	return uint64(1<<((depth)*NBITS)) - 1
+	return uint64(1<<((depth)*NBITS64)) - 1
 }
 
 // Create a string of the form "/%02d/%02d..." to describe a hashPath of
@@ -129,23 +129,23 @@ func nodeMapString(nodeMap uint64) string {
 	return strings.Join(strs, " ")
 }
 
-//indexMask() generates a NBITS(6-bit) mask for a given depth
+//indexMask() generates a NBITS64(6-bit) mask for a given depth
 func indexMask(depth uint) uint64 {
-	//var eightBitMask = uint64(uint8(1<<NBITS) - 1)
-	//return eightBitMask << (depth * NBITS)
-	return uint64(uint8(1<<NBITS)-1) << (depth * NBITS)
+	//var eightBitMask = uint64(uint8(1<<NBITS64) - 1)
+	//return eightBitMask << (depth * NBITS64)
+	return uint64(uint8(1<<NBITS64)-1) << (depth * NBITS64)
 }
 
-//index() calculates a NBITS(6-bit) integer based on the hash and depth
+//index() calculates a NBITS64(6-bit) integer based on the hash and depth
 func index(h60 uint64, depth uint) uint {
 	var idxMask = indexMask(depth)
-	var idx = uint((h60 & idxMask) >> (depth * NBITS))
+	var idx = uint((h60 & idxMask) >> (depth * NBITS64))
 	return idx
 }
 
 //buildHashPath(hashPath, idx, depth)
 func buildHashPath(hashPath uint64, idx, depth uint) uint64 {
-	return hashPath | uint64(idx<<(depth*NBITS))
+	return hashPath | uint64(idx<<(depth*NBITS64))
 }
 
 type Hamt struct {

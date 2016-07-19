@@ -1,4 +1,4 @@
-package hamt
+package hamt_functional
 
 import (
 	"fmt"
@@ -6,7 +6,7 @@ import (
 )
 
 type fullTable struct {
-	hashPath uint64 // depth*NBITS of hash to get to this location in the Trie
+	hashPath uint64 // depth*NBITS64 of hash to get to this location in the Trie
 	nodeMap  uint64
 	nodes    [TABLE_CAPACITY]nodeI
 }

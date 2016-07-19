@@ -1,4 +1,4 @@
-package hamt
+package hamt_functional
 
 type HamtKey interface {
 	Equals(HamtKey) bool
