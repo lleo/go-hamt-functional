@@ -1,4 +1,4 @@
-package hamt_functional
+package hamt64_functional
 
 import (
 	"fmt"
@@ -77,9 +77,10 @@ func newCompressedTable2(depth uint, hashPath uint64, leaf1 leafI, leaf2 flatLea
 
 		curTable.nodes = make([]nodeI, 1)
 
-		var newTable = new(compressedTable)
+		hashPath = buildHashPath(hashPath, idx1, d)
 
-		newTable.hashPath = buildHashPath(hashPath, idx1, d)
+		var newTable = new(compressedTable)
+		newTable.hashPath = hashPath
 
 		curTable.nodeMap = 1 << idx1 //Set the idx1'th bit
 		curTable.nodes[0] = newTable
@@ -90,8 +91,9 @@ func newCompressedTable2(depth uint, hashPath uint64, leaf1 leafI, leaf2 flatLea
 	// OR we hit d = MAXDEPTH.
 	if d == MAXDEPTH {
 		// leaf1.hashcode() == leaf2.hashcode()
+		var idx = index(leaf1.hashcode(), d)
+		hashPath = buildHashPath(hashPath, idx, d)
 		leaf, _ := leaf1.put(leaf2.key, leaf2.val)
-		var idx = index(leaf.hashcode(), d)
 		curTable.set(idx, leaf)
 	}
 
@@ -151,8 +153,6 @@ func (t compressedTable) LongString(indent string, depth uint) string {
 	strs[0] = indent + fmt.Sprintf("compressedTable{hashPath=%s, nentries()=%d", hashPathString(t.hashPath, depth), t.nentries())
 
 	strs[1] = indent + "\tnodeMap=" + nodeMapString(t.nodeMap) + ","
-
-	//strs[2] = indent+fmt.Sprintf("\tlen(t.nodes)=%d,", len(t.nodes))
 
 	for i, n := range t.nodes {
 		if t, ok := n.(tableI); ok {

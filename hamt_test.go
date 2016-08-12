@@ -6,6 +6,9 @@ import (
 	"os"
 	"testing"
 
+	hamt64 "github.com/lleo/go-hamt-functional/hamt64_functional"
+	"github.com/lleo/go-hamt/string_key"
+
 	"github.com/lleo/stringutil"
 )
 
@@ -17,7 +20,7 @@ var midKvs []keyVal
 var hugeKvs []keyVal
 
 var M map[string]int
-var H *Hamt
+var H hamt64.Hamt
 
 func TestMain(m *testing.M) {
 	// SETUP
@@ -35,7 +38,7 @@ func TestMain(m *testing.M) {
 	//numMidKvs := 10000 //ten thousand
 	numMidKvs = 1000 // 10 million
 	for i := 0; i < numMidKvs; i++ {
-		var key = []byte(s0)
+		var key = string_key.StringKey(s0)
 		var val = i + 1
 		midKvs = append(midKvs, keyVal{key, val})
 		s0 = s0.DigitalInc(1) //get off "" first
@@ -47,7 +50,7 @@ func TestMain(m *testing.M) {
 	numHugeKvs = 1 * 1024 * 1024 // one mega-entries
 	//numHugeKvs = 256 * 1024 * 1024 //256 MB
 	for i := 0; i < numHugeKvs; i++ {
-		var key = []byte(s1)
+		var key = string_key.StringKey(s1)
 		var val = i + 1
 		hugeKvs = append(hugeKvs, keyVal{key, val})
 		s1 = s1.DigitalInc(1)
@@ -55,18 +58,18 @@ func TestMain(m *testing.M) {
 
 	// Build map & hamt
 	M = make(map[string]int)
-	H = &EMPTY
+	H = hamt64.EMPTY
 	var s = stringutil.Str("aaa")
 	for i := 0; i < numHugeKvs; i++ {
 		M[string(s)] = i + 1
-		H, _ = H.Put([]byte(s), i+1)
+		H, _ = H.Put(string_key.StringKey(s), i+1)
 		s = s.DigitalInc(1)
 	}
 
 	// RUN
 	xit := m.Run()
 
-	// TEARDOW
+	// TEARDOWN
 
 	os.Exit(xit)
 }
@@ -86,10 +89,10 @@ func genRandomizedKvsInPlace(kvs []keyVal) []keyVal {
 	return randKvs
 }
 
-func TestEmptyPutDelCrazy(t *testing.T) {
-	var key = []byte("aaaaaaaaaaaaaaaaaaaaaabbcdefghijkl")
+func TestHamt64PutDelCrazy(t *testing.T) {
+	var key = string_key.StringKey("aaaaaaaaaaaaaaaaaaaaaabbcdefghijkl")
 	var val = 14126
-	var h = &EMPTY
+	var h = hamt64.EMPTY
 
 	h, _ = h.Put(key, val)
 
@@ -108,10 +111,10 @@ func TestEmptyPutDelCrazy(t *testing.T) {
 	}
 }
 
-func TestEmptyPutOnceGetOnce(t *testing.T) {
-	key := []byte("foo")
+func TestHamt64PutOnceGetOnce(t *testing.T) {
+	key := string_key.StringKey("foo")
 
-	h, _ := EMPTY.Put(key, 1)
+	h, _ := hamt64.EMPTY.Put(key, 1)
 
 	val, ok := h.Get(key)
 
@@ -124,11 +127,11 @@ func TestEmptyPutOnceGetOnce(t *testing.T) {
 	}
 }
 
-func TestEmptyPutThriceFlatGetThrice(t *testing.T) {
-	var keys = [][]byte{[]byte("foo"), []byte("bar"), []byte("baz")}
+func TestHamt64PutThriceFlatGetThrice(t *testing.T) {
+	var keys = []string_key.StringKey{string_key.StringKey("foo"), string_key.StringKey("bar"), string_key.StringKey("baz")}
 	var vals = []int{1, 2, 3}
 
-	var h *Hamt = &EMPTY
+	var h = hamt64.EMPTY
 
 	for i := range keys {
 		h, _ = h.Put(keys[i], vals[i])
@@ -149,17 +152,17 @@ func TestEmptyPutThriceFlatGetThrice(t *testing.T) {
 }
 
 // "d":4 && "aa":27 collide at depth 0 & 1
-func TestPutGetTwoTableDeepCollision(t *testing.T) {
-	var h = &EMPTY
+func TestHamt64PutGetTwoTableDeepCollision(t *testing.T) {
+	var h = hamt64.EMPTY
 
-	h, _ = h.Put([]byte("d"), 4)
-	h, _ = h.Put([]byte("aa"), 27)
+	h, _ = h.Put(string_key.StringKey("d"), 4)
+	h, _ = h.Put(string_key.StringKey("aa"), 27)
 
 	t.Log("h =\n%s", h.LongString(""))
 
 	var val interface{}
 	var found bool
-	val, found = h.Get([]byte("d"))
+	val, found = h.Get(string_key.StringKey("d"))
 	if !found {
 		t.Error("failed to find val for key=\"d\"")
 	}
@@ -167,7 +170,7 @@ func TestPutGetTwoTableDeepCollision(t *testing.T) {
 		t.Error("h.Get(\"d\") failed to retrieve val = 4")
 	}
 
-	val, found = h.Get([]byte("aa"))
+	val, found = h.Get(string_key.StringKey("aa"))
 	if !found {
 		t.Error("failed to find val for key=\"aa\"")
 	}
@@ -179,8 +182,8 @@ func TestPutGetTwoTableDeepCollision(t *testing.T) {
 }
 
 // Where Many == 64
-func TestEmptyPutManyGetMany(t *testing.T) {
-	var h = &EMPTY
+func TestHamt64PutManyGetMany(t *testing.T) {
+	var h = hamt64.EMPTY
 
 	for i := 0; i < 64; i++ {
 		var key = midKvs[i].key
@@ -202,10 +205,10 @@ func TestEmptyPutManyGetMany(t *testing.T) {
 	}
 }
 
-func TestEmptyPutOnceDelOnce(t *testing.T) {
-	var h = &EMPTY
+func TestHamt64PutOnceDelOnce(t *testing.T) {
+	var h = hamt64.EMPTY
 
-	var key = []byte("a")
+	var key = string_key.StringKey("a")
 	var val interface{} = 1
 
 	h, _ = h.Put(key, val)
@@ -227,10 +230,10 @@ func TestEmptyPutOnceDelOnce(t *testing.T) {
 	}
 }
 
-func TestEmptyPutOnceDelOnceIsEmpty(t *testing.T) {
-	var h = &EMPTY
+func TestHamt64PutOnceDelOnceIsEmpty(t *testing.T) {
+	var h = hamt64.EMPTY
 
-	var key = []byte("a")
+	var key = string_key.StringKey("a")
 	var val interface{} = 1
 
 	h, _ = h.Put(key, val)
@@ -256,11 +259,11 @@ func TestEmptyPutOnceDelOnceIsEmpty(t *testing.T) {
 	}
 }
 
-func TestEmptyPutThriceFlatDelThriceIsEmpty(t *testing.T) {
-	var keys = [][]byte{[]byte("foo"), []byte("bar"), []byte("baz")}
+func TestHamt64PutThriceFlatDelThriceIsEmpty(t *testing.T) {
+	var keys = []string_key.StringKey{string_key.StringKey("foo"), string_key.StringKey("bar"), string_key.StringKey("baz")}
 	var vals = []int{1, 2, 3}
 
-	var h *Hamt = &EMPTY
+	var h = hamt64.EMPTY
 
 	for i := range keys {
 		h, _ = h.Put(keys[i], vals[i])
@@ -286,16 +289,16 @@ func TestEmptyPutThriceFlatDelThriceIsEmpty(t *testing.T) {
 }
 
 // "c":3 && "fg":38 at depth 1
-func TestPutDelOneTableDeepCollisionIsEmpty(t *testing.T) {
-	var h = &EMPTY
+func TestHamt64PutDelOneTableDeepCollisionIsEmpty(t *testing.T) {
+	var h = hamt64.EMPTY
 
-	h, _ = h.Put([]byte("c"), 3)
-	h, _ = h.Put([]byte("fg"), 38)
+	h, _ = h.Put(string_key.StringKey("c"), 3)
+	h, _ = h.Put(string_key.StringKey("fg"), 38)
 
 	var val interface{}
 	var deleted bool
 
-	h, val, deleted = h.Del([]byte("c"))
+	h, val, deleted = h.Del(string_key.StringKey("c"))
 
 	if !deleted {
 		t.Error("failed to delete for key=\"c\"")
@@ -304,7 +307,7 @@ func TestPutDelOneTableDeepCollisionIsEmpty(t *testing.T) {
 		t.Error("h.Get(\"c\") failed to retrieve val = 3")
 	}
 
-	h, val, deleted = h.Del([]byte("fg"))
+	h, val, deleted = h.Del(string_key.StringKey("fg"))
 
 	if !deleted {
 		t.Error("failed to delete for key=\"fg\"")
@@ -319,17 +322,17 @@ func TestPutDelOneTableDeepCollisionIsEmpty(t *testing.T) {
 }
 
 // "d":4 && "aa":27 collide at depth 2
-func TestPutDelTwoTableDeepCollisionIsEmpty(t *testing.T) {
-	var h = &EMPTY
+func TestHamt64PutDelTwoTableDeepCollisionIsEmpty(t *testing.T) {
+	var h = hamt64.EMPTY
 
-	h, _ = h.Put([]byte("d"), 4)
-	h, _ = h.Put([]byte("aa"), 27)
+	h, _ = h.Put(string_key.StringKey("d"), 4)
+	h, _ = h.Put(string_key.StringKey("aa"), 27)
 
 	t.Logf("h =\n%s", h.LongString(""))
 
 	var val interface{}
 	var deleted bool
-	h, val, deleted = h.Del([]byte("d"))
+	h, val, deleted = h.Del(string_key.StringKey("d"))
 	if !deleted {
 		t.Error("failed to delete for key=\"d\"")
 	}
@@ -339,7 +342,7 @@ func TestPutDelTwoTableDeepCollisionIsEmpty(t *testing.T) {
 
 	t.Logf("After h.Del(%q): h =\n%s", "d", h.LongString(""))
 
-	h, val, deleted = h.Del([]byte("aa"))
+	h, val, deleted = h.Del(string_key.StringKey("aa"))
 	if !deleted {
 		t.Error("failed to delete for key=\"aa\"")
 	}
@@ -357,8 +360,8 @@ func TestPutDelTwoTableDeepCollisionIsEmpty(t *testing.T) {
 }
 
 // Where Many == 64
-func TestEmptyPutManyDelManyIsEmpty(t *testing.T) {
-	var h = &EMPTY
+func TestHamt64PutManyDelManyIsEmpty(t *testing.T) {
+	var h = hamt64.EMPTY
 
 	for i := 0; i < 64; i++ {
 		var key = midKvs[i].key
@@ -393,8 +396,28 @@ func TestEmptyPutManyDelManyIsEmpty(t *testing.T) {
 	}
 }
 
-func TestEmptyPutDelTrumpIsEmpty(t *testing.T) {
-	var h = &EMPTY
+func TestHamt64PutGetHuge(t *testing.T) {
+	var h = hamt64.EMPTY
+
+	for i := 0; i < numHugeKvs; i++ {
+		h, _ = h.Put(hugeKvs[i].key, hugeKvs[i].val)
+	}
+
+	for i := 0; i < numHugeKvs; i++ {
+		var key = hugeKvs[i].key
+		var val = hugeKvs[i].val
+		var vv, found = h.Get(key)
+		if !found {
+			t.Fatalf("key,%q not found", key)
+		}
+		if val != vv {
+			t.Fatalf("key,%q found incorrect vv,%d != val,%d", key, vv, val)
+		}
+	}
+}
+
+func TestHamt64PutDelHugeIsEmpty(t *testing.T) {
+	var h = hamt64.EMPTY
 
 	for i := 0; i < numHugeKvs; i++ {
 		h, _ = h.Put(hugeKvs[i].key, hugeKvs[i].val)
@@ -406,10 +429,64 @@ func TestEmptyPutDelTrumpIsEmpty(t *testing.T) {
 		var key = hugeKvs[i].key
 		var expected_val = hugeKvs[i].val
 
-		var val interface{}
-		var deleted bool
-		var h1 *Hamt
-		h1, val, deleted = h.Del(key)
+		//var h1 hamt64.Hamt
+		//var val interface{}
+		//var deleted bool
+		var h1, val, deleted = h.Del(key)
+		if !deleted {
+			t.Errorf("Did NOT find&delete for key=\"%s\"", key)
+		}
+		if val != expected_val {
+			t.Errorf("val,%d != expected_val,%d", val, expected_val)
+		}
+		h = h1
+	}
+	//t.Log("### Testing compressedTable Shrinkage ###")
+
+	if !h.IsEmpty() {
+		//Lgr.Println("TestEmptyPutDelTrumpIsEmpty Failed cur !h.IsEmpty()")
+		//Lgr.Println(h.LongString(""))
+		t.Fatal("NOT h.IsEmpty()")
+	}
+}
+
+func TestHamt32PutGetHuge(t *testing.T) {
+	var h = hamt32.EMPTY
+
+	for i := 0; i < numHugeKvs; i++ {
+		h, _ = h.Put(hugeKvs[i].key, hugeKvs[i].val)
+	}
+
+	for i := 0; i < numHugeKvs; i++ {
+		var key = hugeKvs[i].key
+		var val = hugeKvs[i].val
+		var vv, found = h.Get(key)
+		if !found {
+			t.Fatalf("key,%q not found", key)
+		}
+		if val != vv {
+			t.Fatalf("key,%q found incorrect vv,%d != val,%d", key, vv, val)
+		}
+	}
+}
+
+func dTestHamt32PutDelHugeIsEmpty(t *testing.T) {
+	var h = hamt32.EMPTY
+
+	for i := 0; i < numHugeKvs; i++ {
+		h, _ = h.Put(hugeKvs[i].key, hugeKvs[i].val)
+	}
+
+	//Lgr.Println("TEST: h = ", h.LongString(""))
+
+	for i := 0; i < numHugeKvs; i++ {
+		var key = hugeKvs[i].key
+		var expected_val = hugeKvs[i].val
+
+		//var h1 hamt64.Hamt
+		//var val interface{}
+		//var deleted bool
+		var h1, val, deleted = h.Del(key)
 		if !deleted {
 			t.Errorf("Did NOT find&delete for key=\"%s\"", key)
 		}
@@ -435,7 +512,7 @@ func TestEmptyPutDelTrumpIsEmpty(t *testing.T) {
 //}
 //
 //func TestHamtPut(t *testing.T) {
-//	var h = &EMPTY
+//	var h = hamt64.EMPTY
 //	for i := 0; i < numHugeKvs; i++ {
 //		h, _ = h.Put(hugeKvs[i].key, i+1)
 //	}
@@ -444,13 +521,13 @@ func TestEmptyPutDelTrumpIsEmpty(t *testing.T) {
 func BenchmarkMapGet(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		var j = int(rand.Int31()) % numHugeKvs
-		var s = string(hugeKvs[j].key)
+		var s = hugeKvs[j].key.String()
 		var v = M[s]
 		v += 1
 	}
 }
 
-func BenchmarkHamtGet(b *testing.B) {
+func BenchmarkHamt64Get(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		var j = int(rand.Int31()) % numHugeKvs
 		var k = hugeKvs[j].key
@@ -467,11 +544,11 @@ func BenchmarkMapPut(b *testing.B) {
 	}
 }
 
-func BenchmarkHamtPut(b *testing.B) {
-	var h = &EMPTY
+func BenchmarkHamt64Put(b *testing.B) {
+	var h = hamt64.EMPTY
 	var s = stringutil.Str("aaa")
 	for i := 0; i < b.N; i++ {
-		h, _ = h.Put([]byte(s), i+1)
+		h, _ = h.Put(string_key.StringKey(s), i+1)
 		s = s.DigitalInc(1)
 	}
 }

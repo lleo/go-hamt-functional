@@ -1,8 +1,10 @@
-package hamt_functional
+package hamt64_functional
 
 import (
 	"fmt"
 	"strings"
+
+	"github.com/lleo/go-hamt/hamt_key"
 )
 
 type collisionLeaf struct {
@@ -40,37 +42,37 @@ func (l collisionLeaf) String() string {
 	return fmt.Sprintf("{hash60:%s, kvs:[]kv{%s}}", hash60String(l.hash60), jkvstr)
 }
 
-func (l collisionLeaf) get(key []byte) (interface{}, bool) {
+func (l collisionLeaf) get(key hamt_key.Key) (interface{}, bool) {
 	for i := 0; i < len(l.kvs); i++ {
-		if byteSlicesEqual(l.kvs[i].key, key) {
+		if l.kvs[i].key.Equals(key) {
 			return l.kvs[i].val, true
 		}
 	}
 	return nil, false
 }
 
-func (l collisionLeaf) put(key []byte, val interface{}) (leafI, bool) {
+func (l collisionLeaf) put(key hamt_key.Key, val interface{}) (leafI, bool) {
 	nl := new(collisionLeaf)
 	nl.hash60 = l.hash60
 	nl.kvs = append(nl.kvs, l.kvs...)
 
-	for i, kv := range l.kvs {
-		if byteSlicesEqual(kv.key, key) {
+	for i := 0; i < len(l.kvs); i++ {
+		if l.kvs[i].key.Equals(key) {
 			nl.kvs[i].val = val
-			return nl, true // val was replaced
+			return nl, false // key,val was not added, merely replaced
 		}
 	}
 
 	nl.kvs = append(nl.kvs, keyVal{key, val})
-	return nl, false
+	return nl, true // key,val was added
 }
 
-func (l collisionLeaf) del(key []byte) (leafI, interface{}, bool) {
+func (l collisionLeaf) del(key hamt_key.Key) (leafI, interface{}, bool) {
 	if len(l.kvs) == 2 {
-		if byteSlicesEqual(key, l.kvs[0].key) {
+		if l.kvs[0].key.Equals(key) {
 			return NewFlatLeaf(l.hash60, l.kvs[1].key, l.kvs[1].val), l.kvs[0].val, true
 		}
-		if byteSlicesEqual(key, l.kvs[1].key) {
+		if l.kvs[1].key.Equals(key) {
 			return NewFlatLeaf(l.hash60, l.kvs[0].key, l.kvs[0].val), l.kvs[1].val, true
 		}
 		return nil, nil, false
@@ -79,7 +81,7 @@ func (l collisionLeaf) del(key []byte) (leafI, interface{}, bool) {
 	var nl = l.copy()
 
 	for i := 0; i < len(nl.kvs); i++ {
-		if byteSlicesEqual(key, nl.kvs[i].key) {
+		if l.kvs[i].key.Equals(key) {
 			var retVal = nl.kvs[i].val
 
 			// removing the i'th element of a slice; wiki/SliceTricks "Delete"
@@ -90,4 +92,8 @@ func (l collisionLeaf) del(key []byte) (leafI, interface{}, bool) {
 	}
 
 	return nil, nil, false
+}
+
+func (l *collisionLeaf) keyVals() []keyVal {
+	return l.kvs
 }
