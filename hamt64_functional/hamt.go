@@ -33,7 +33,11 @@ import (
 	"github.com/lleo/go-hamt/hamt_key"
 )
 
-var Lgr = log.New(os.Stderr, "[hamt] ", log.Lshortfile)
+func init() {
+	log.SetOutput(os.Stderr)
+	log.SetPrefix("[hamt] ")
+	log.SetFlags(log.Lshortfile)
+}
 
 // The number of bits to partition the hashcode and to index each table. By
 // logical necessity this MUST be 6 bits because 2^6 == 64; the number of
@@ -73,11 +77,11 @@ func hashPathString(hashPath uint64, depth uint) string {
 	if depth == 0 {
 		return "/"
 	}
-	var strs = make([]string, depth)
+	var strs = make([]string, depth+1)
 
-	for d := depth; d > 0; d-- {
-		var idx = index(hashPath, d-1)
-		strs[d-1] = fmt.Sprintf("%02d", idx)
+	for d := int(depth); d >= 0; d-- {
+		var idx = index(hashPath, uint(d))
+		strs[d] = fmt.Sprintf("%02d", idx)
 	}
 	return "/" + strings.Join(strs, "/")
 }
@@ -237,7 +241,7 @@ func (h Hamt) Put(key hamt_key.Key, val interface{}) (Hamt, bool) {
 	var hashPath uint64 = 0
 	var curTable = h.root
 
-	for depth = 0; depth < MAXDEPTH; depth++ {
+	for depth = 0; depth <= MAXDEPTH; depth++ {
 		var idx = index(h60, depth)
 		var curNode = curTable.get(idx)
 
@@ -251,7 +255,7 @@ func (h Hamt) Put(key hamt_key.Key, val interface{}) (Hamt, bool) {
 		if oldLeaf, ok := curNode.(leafI); ok {
 
 			if oldLeaf.hashcode() == h60 {
-				Lgr.Printf("HOLY SHIT!!! Two keys collided with this same hash60 orig key=\"%s\" new key=\"%s\" h60=0x%016x", oldLeaf.(flatLeaf).key, key, h60)
+				log.Printf("HOLY SHIT!!! Two keys collided with this same hash60 orig key=\"%s\" new key=\"%s\" h60=0x%016x", oldLeaf.(flatLeaf).key, key, h60)
 
 				var newLeaf leafI
 				newLeaf, inserted = oldLeaf.put(key, val)
@@ -323,10 +327,10 @@ func (h Hamt) Del(key hamt_key.Key) (Hamt, interface{}, bool) {
 		if oldLeaf, ok := curNode.(leafI); ok {
 			if oldLeaf.hashcode() != h60 {
 				// Found a leaf, but not the leaf I was looking for.
-				Lgr.Printf("h.Del(%q): depth=%d; h60=%s", key, depth, hash60String(h60))
-				Lgr.Printf("h.Del(%q): idx=%d", key, idx)
-				Lgr.Printf("h.Del(%q): curTable=\n%s", key, curTable.LongString("", depth))
-				Lgr.Printf("h.Del(%q): Found a leaf, but not the leaf I was looking for; depth=%d; idx=%d; oldLeaf=%s", key, depth, idx, oldLeaf)
+				log.Printf("h.Del(%q): depth=%d; h60=%s", key, depth, hash60String(h60))
+				log.Printf("h.Del(%q): idx=%d", key, idx)
+				log.Printf("h.Del(%q): curTable=\n%s", key, curTable.LongString("", depth))
+				log.Printf("h.Del(%q): Found a leaf, but not the leaf I was looking for; depth=%d; idx=%d; oldLeaf=%s", key, depth, idx, oldLeaf)
 				return h, nil, false
 			}
 
