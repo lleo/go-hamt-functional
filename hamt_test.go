@@ -6,6 +6,7 @@ import (
 	"os"
 	"testing"
 
+	hamt32 "github.com/lleo/go-hamt-functional/hamt32_functional"
 	hamt64 "github.com/lleo/go-hamt-functional/hamt64_functional"
 	"github.com/lleo/go-hamt/string_key"
 
@@ -31,7 +32,7 @@ func TestMain(m *testing.M) {
 		log.Fatal(err)
 	}
 	defer logFile.Close()
-	//Lgr.SetOutput(logFile)
+	log.SetOutput(logFile)
 
 	midKvs = make([]keyVal, 0, 32)
 	var s0 = stringutil.Str("aaa")
@@ -423,7 +424,7 @@ func TestHamt64PutDelHugeIsEmpty(t *testing.T) {
 		h, _ = h.Put(hugeKvs[i].key, hugeKvs[i].val)
 	}
 
-	//Lgr.Println("TEST: h = ", h.LongString(""))
+	//log.Println("TEST: h = ", h.LongString(""))
 
 	for i := 0; i < numHugeKvs; i++ {
 		var key = hugeKvs[i].key
@@ -444,8 +445,8 @@ func TestHamt64PutDelHugeIsEmpty(t *testing.T) {
 	//t.Log("### Testing compressedTable Shrinkage ###")
 
 	if !h.IsEmpty() {
-		//Lgr.Println("TestEmptyPutDelTrumpIsEmpty Failed cur !h.IsEmpty()")
-		//Lgr.Println(h.LongString(""))
+		//log.Println("TestEmptyPutDelTrumpIsEmpty Failed cur !h.IsEmpty()")
+		//log.Println(h.LongString(""))
 		t.Fatal("NOT h.IsEmpty()")
 	}
 }
@@ -453,9 +454,19 @@ func TestHamt64PutDelHugeIsEmpty(t *testing.T) {
 func TestHamt32PutGetHuge(t *testing.T) {
 	var h = hamt32.EMPTY
 
+	var k0 = string_key.StringKey("bbd")
+
 	for i := 0; i < numHugeKvs; i++ {
 		h, _ = h.Put(hugeKvs[i].key, hugeKvs[i].val)
+		//if hamt32.HashPathMatches(hugeKvs[i].key.Hash30(), "/27/06") {
+		if hugeKvs[i].key.Equals(k0) {
+			log.Printf("hugeKvs[%d].key.Hash30() = %s\n", i, hamt32.Hash30String(hugeKvs[i].key.Hash30()))
+			log.Printf("hugeKvs[%d].key.Hash30() = %032b\n", i, hugeKvs[i].key.Hash30)
+			log.Println(h.LongString(""))
+		}
 	}
+
+	log.Println(h.LongString(""))
 
 	for i := 0; i < numHugeKvs; i++ {
 		var key = hugeKvs[i].key
@@ -477,7 +488,7 @@ func dTestHamt32PutDelHugeIsEmpty(t *testing.T) {
 		h, _ = h.Put(hugeKvs[i].key, hugeKvs[i].val)
 	}
 
-	//Lgr.Println("TEST: h = ", h.LongString(""))
+	//log.Println("TEST: h = ", h.LongString(""))
 
 	for i := 0; i < numHugeKvs; i++ {
 		var key = hugeKvs[i].key
@@ -498,8 +509,8 @@ func dTestHamt32PutDelHugeIsEmpty(t *testing.T) {
 	//t.Log("### Testing compressedTable Shrinkage ###")
 
 	if !h.IsEmpty() {
-		//Lgr.Println("TestEmptyPutDelTrumpIsEmpty Failed cur !h.IsEmpty()")
-		//Lgr.Println(h.LongString(""))
+		//log.Println("TestEmptyPutDelTrumpIsEmpty Failed cur !h.IsEmpty()")
+		//log.Println(h.LongString(""))
 		t.Fatal("NOT h.IsEmpty()")
 	}
 }
