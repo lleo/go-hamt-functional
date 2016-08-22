@@ -481,7 +481,7 @@ func TestHamt32PutGetHuge(t *testing.T) {
 	}
 }
 
-func dTestHamt32PutDelHugeIsEmpty(t *testing.T) {
+func TestHamt32PutDelHugeIsEmpty(t *testing.T) {
 	var h = hamt32.EMPTY
 
 	for i := 0; i < numHugeKvs; i++ {
