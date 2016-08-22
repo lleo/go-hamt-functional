@@ -34,7 +34,11 @@ import (
 	"github.com/lleo/go-hamt/hamt_key"
 )
 
-var Lgr = log.New(os.Stderr, "[hamt] ", log.Lshortfile)
+func init() {
+	log.SetOutput(os.Stderr)
+	log.SetPrefix("[hamt] ")
+	log.SetFlags(log.Lshortfile)
+}
 
 // The number of bits to partition the hashcode and to index each table. By
 // logical necessity this MUST be 5 bits because 2^5 == 32; the number of
@@ -291,7 +295,7 @@ func (h Hamt) Put(key hamt_key.Key, val interface{}) (Hamt, bool) {
 		if oldLeaf, ok := curNode.(leafI); ok {
 
 			if oldLeaf.hashcode() == h30 {
-				Lgr.Printf("HOLY SHIT!!! Two keys collided with this same hash30 orig key=\"%s\" new key=\"%s\" h30=0x%016x", oldLeaf.(flatLeaf).key, key, h30)
+				log.Printf("HOLY SHIT!!! Two keys collided with this same hash30 orig key=\"%s\" new key=\"%s\" h30=0x%016x", oldLeaf.(flatLeaf).key, key, h30)
 
 				var newLeaf leafI
 				newLeaf, inserted = oldLeaf.put(key, val)
@@ -363,10 +367,10 @@ func (h Hamt) Del(key hamt_key.Key) (Hamt, interface{}, bool) {
 		if oldLeaf, ok := curNode.(leafI); ok {
 			if oldLeaf.hashcode() != h30 {
 				// Found a leaf, but not the leaf I was looking for.
-				Lgr.Printf("h.Del(%q): depth=%d; h30=%s", key, depth, Hash30String(h30))
-				Lgr.Printf("h.Del(%q): idx=%d", key, idx)
-				Lgr.Printf("h.Del(%q): curTable=\n%s", key, curTable.LongString("", depth))
-				Lgr.Printf("h.Del(%q): Found a leaf, but not the leaf I was looking for; depth=%d; idx=%d; oldLeaf=%s", key, depth, idx, oldLeaf)
+				log.Printf("h.Del(%q): depth=%d; h30=%s", key, depth, Hash30String(h30))
+				log.Printf("h.Del(%q): idx=%d", key, idx)
+				log.Printf("h.Del(%q): curTable=\n%s", key, curTable.LongString("", depth))
+				log.Printf("h.Del(%q): Found a leaf, but not the leaf I was looking for; depth=%d; idx=%d; oldLeaf=%s", key, depth, idx, oldLeaf)
 				return h, nil, false
 			}
 
