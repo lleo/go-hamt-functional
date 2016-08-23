@@ -1,7 +1,6 @@
 package hamt_functional
 
 import (
-	"log"
 	"math/rand"
 	"os"
 	"testing"
@@ -28,12 +27,12 @@ func TestMain(m *testing.M) {
 	// SETUP
 	genRandomizedKvs = genRandomizedKvsInPlace
 
-	var logFile, err = os.OpenFile("test.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer logFile.Close()
-	log.SetOutput(logFile)
+	//var logFile, err = os.OpenFile("test.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	//if err != nil {
+	//	log.Fatal(err)
+	//}
+	//defer logFile.Close()
+	//log.SetOutput(logFile)
 
 	midKvs = make([]keyVal, 0, 32)
 	var s0 = stringutil.Str("aaa")
