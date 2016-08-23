@@ -43,10 +43,10 @@ func init() {
 // The number of bits to partition the hashcode and to index each table. By
 // logical necessity this MUST be 5 bits because 2^5 == 32; the number of
 // entries in a table.
-const NBITS32 uint = 5
+const NBITS uint = 5
 
 // The Capacity of a table; 2^5 == 32;
-const TABLE_CAPACITY uint = 1 << NBITS32
+const TABLE_CAPACITY uint = 1 << NBITS
 
 const mask30 = 1<<30 - 1
 
@@ -65,7 +65,7 @@ func ASSERT(test bool, msg string) {
 }
 
 func hashPathMask(depth uint) uint32 {
-	return uint32(1<<((depth)*NBITS32)) - 1
+	return uint32(1<<((depth)*NBITS)) - 1
 }
 
 // Create a string of the form "/%02d/%02d..." to describe a hashPath of
@@ -135,7 +135,7 @@ func HashPathMatches(hashPath uint32, hashPathStr string) bool {
 			log.Printf("the i,%d entry,%d of hashPathStr,%s is >31", i, n, hashPathStr)
 			return false
 		}
-		bitStr |= n << ((NBITS32 - uint(i)) * NBITS32)
+		bitStr |= n << ((NBITS - uint(i)) * NBITS)
 		//log.Printf("HashPathMatches: bitStr=%032b", bitStr)
 	}
 
@@ -146,21 +146,21 @@ func HashPathMatches(hashPath uint32, hashPathStr string) bool {
 	}
 }
 
-//indexMask() generates a NBITS32(5-bit) mask for a given depth
+//indexMask() generates a NBITS(5-bit) mask for a given depth
 func indexMask(depth uint) uint32 {
-	return uint32(uint8(1<<NBITS32)-1) << (depth * NBITS32)
+	return uint32(uint8(1<<NBITS)-1) << (depth * NBITS)
 }
 
-//index() calculates a NBITS32(5-bit) integer based on the hash and depth
+//index() calculates a NBITS(5-bit) integer based on the hash and depth
 func index(h30 uint32, depth uint) uint {
 	var idxMask = indexMask(depth)
-	var idx = uint((h30 & idxMask) >> (depth * NBITS32))
+	var idx = uint((h30 & idxMask) >> (depth * NBITS))
 	return idx
 }
 
 //buildHashPath(hashPath, idx, depth)
 func buildHashPath(hashPath uint32, idx, depth uint) uint32 {
-	return hashPath | uint32(idx<<(depth*NBITS32))
+	return hashPath | uint32(idx<<(depth*NBITS))
 }
 
 type keyVal struct {

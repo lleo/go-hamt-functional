@@ -6,7 +6,7 @@ import (
 )
 
 type fullTable struct {
-	hashPath uint32 // depth*NBITS32 of hash to get to this location in the Trie
+	hashPath uint32 // depth*NBITS of hash to get to this location in the Trie
 	nodeMap  uint32
 	nodes    [TABLE_CAPACITY]nodeI
 }
