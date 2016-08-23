@@ -21,7 +21,8 @@ var midKvs []keyVal
 var hugeKvs []keyVal
 
 var M map[string]int
-var H hamt64.Hamt
+var H32 hamt32.Hamt
+var H64 hamt64.Hamt
 
 func TestMain(m *testing.M) {
 	// SETUP
@@ -59,11 +60,13 @@ func TestMain(m *testing.M) {
 
 	// Build map & hamt
 	M = make(map[string]int)
-	H = hamt64.EMPTY
+	H32 = hamt32.EMPTY
+	H64 = hamt64.EMPTY
 	var s = stringutil.Str("aaa")
 	for i := 0; i < numHugeKvs; i++ {
 		M[string(s)] = i + 1
-		H, _ = H.Put(string_key.StringKey(s), i+1)
+		H32, _ = H32.Put(string_key.StringKey(s), i+1)
+		H64, _ = H64.Put(string_key.StringKey(s), i+1)
 		s = s.DigitalInc(1)
 	}
 
@@ -454,19 +457,13 @@ func TestHamt64PutDelHugeIsEmpty(t *testing.T) {
 func TestHamt32PutGetHuge(t *testing.T) {
 	var h = hamt32.EMPTY
 
-	var k0 = string_key.StringKey("bbd")
+	//var k0 = string_key.StringKey("bbd")
 
 	for i := 0; i < numHugeKvs; i++ {
 		h, _ = h.Put(hugeKvs[i].key, hugeKvs[i].val)
-		//if hamt32.HashPathMatches(hugeKvs[i].key.Hash30(), "/27/06") {
-		if hugeKvs[i].key.Equals(k0) {
-			log.Printf("hugeKvs[%d].key.Hash30() = %s\n", i, hamt32.Hash30String(hugeKvs[i].key.Hash30()))
-			log.Printf("hugeKvs[%d].key.Hash30() = %032b\n", i, hugeKvs[i].key.Hash30)
-			log.Println(h.LongString(""))
-		}
 	}
 
-	log.Println(h.LongString(""))
+	//log.Println(h.LongString(""))
 
 	for i := 0; i < numHugeKvs; i++ {
 		var key = hugeKvs[i].key
@@ -538,11 +535,19 @@ func BenchmarkMapGet(b *testing.B) {
 	}
 }
 
+func BenchmarkHamt32Get(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		var j = int(rand.Int31()) % numHugeKvs
+		var k = hugeKvs[j].key
+		var _, _ = H32.Get(k)
+	}
+}
+
 func BenchmarkHamt64Get(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		var j = int(rand.Int31()) % numHugeKvs
 		var k = hugeKvs[j].key
-		var _, _ = H.Get(k)
+		var _, _ = H64.Get(k)
 	}
 }
 
@@ -551,6 +556,15 @@ func BenchmarkMapPut(b *testing.B) {
 	var s = stringutil.Str("aaa")
 	for i := 0; i < b.N; i++ {
 		m[string(s)] = i + 1
+		s = s.DigitalInc(1)
+	}
+}
+
+func BenchmarkHamt32Put(b *testing.B) {
+	var h = hamt32.EMPTY
+	var s = stringutil.Str("aaa")
+	for i := 0; i < b.N; i++ {
+		h, _ = h.Put(string_key.StringKey(s), i+1)
 		s = s.DigitalInc(1)
 	}
 }

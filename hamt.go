@@ -1,10 +1,12 @@
+/*
+ */
 package hamt_functional
 
 import (
 	"fmt"
 
-	hamt32 "github.com/lleo/go-hamt-functional/hamt32_functional"
-	hamt64 "github.com/lleo/go-hamt-functional/hamt64_functional"
+	"github.com/lleo/go-hamt-functional/hamt32_functional"
+	"github.com/lleo/go-hamt-functional/hamt64_functional"
 	"github.com/lleo/go-hamt/hamt_key"
 )
 
@@ -26,10 +28,10 @@ func (kv keyVal) String() string {
 	return fmt.Sprintf("keyVal{%s, %v}", kv.key, kv.val)
 }
 
-func NewHamt64() hamt64.Hamt {
-	return hamt64.EMPTY
+func NewHamt32() hamt32_functional.Hamt {
+	return hamt32_functional.EMPTY
 }
 
-func NewHamt32() hamt32.Hamt {
-	return hamt32.EMPTY
+func NewHamt64() hamt64_functional.Hamt {
+	return hamt64_functional.EMPTY
 }
