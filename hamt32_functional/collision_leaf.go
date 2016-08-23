@@ -12,7 +12,7 @@ type collisionLeaf struct {
 	kvs    []keyVal
 }
 
-func NewCollisionLeaf(hash uint32, kvs []keyVal) *collisionLeaf {
+func newCollisionLeaf(hash uint32, kvs []keyVal) *collisionLeaf {
 	leaf := new(collisionLeaf)
 	leaf.hash30 = hash & mask30
 	leaf.kvs = append(leaf.kvs, kvs...)
@@ -39,7 +39,7 @@ func (l collisionLeaf) String() string {
 	}
 	var jkvstr = strings.Join(kvstrs, ",")
 
-	return fmt.Sprintf("{hash30:%s, kvs:[]kv{%s}}", Hash30String(l.hash30), jkvstr)
+	return fmt.Sprintf("{hash30:%s, kvs:[]kv{%s}}", hash30String(l.hash30), jkvstr)
 }
 
 func (l collisionLeaf) get(key hamt_key.Key) (interface{}, bool) {
@@ -70,10 +70,10 @@ func (l collisionLeaf) put(key hamt_key.Key, val interface{}) (leafI, bool) {
 func (l collisionLeaf) del(key hamt_key.Key) (leafI, interface{}, bool) {
 	if len(l.kvs) == 2 {
 		if l.kvs[0].key.Equals(key) {
-			return NewFlatLeaf(l.hash30, l.kvs[1].key, l.kvs[1].val), l.kvs[0].val, true
+			return newFlatLeaf(l.hash30, l.kvs[1].key, l.kvs[1].val), l.kvs[0].val, true
 		}
 		if l.kvs[1].key.Equals(key) {
-			return NewFlatLeaf(l.hash30, l.kvs[0].key, l.kvs[0].val), l.kvs[1].val, true
+			return newFlatLeaf(l.hash30, l.kvs[0].key, l.kvs[0].val), l.kvs[1].val, true
 		}
 		return nil, nil, false
 	}

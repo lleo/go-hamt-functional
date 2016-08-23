@@ -11,7 +11,7 @@ type fullTable struct {
 	nodes    [TABLE_CAPACITY]nodeI
 }
 
-func UpgradeToFullTable(hashPath uint32, tabEnts []tableEntry) tableI {
+func upgradeToFullTable(hashPath uint32, tabEnts []tableEntry) tableI {
 	var ft = new(fullTable)
 	ft.hashPath = hashPath
 	//ft.nodeMap = 0 //unnecessary
@@ -44,7 +44,7 @@ func (t fullTable) copy() *fullTable {
 // String() is required for nodeI
 func (t fullTable) String() string {
 	// fullTable{hashPath:/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d, nentries:%d,}
-	return fmt.Sprintf("fullTable{hashPath:%s, nentries()=%d}", Hash30String(t.hashPath), t.nentries())
+	return fmt.Sprintf("fullTable{hashPath:%s, nentries()=%d}", hash30String(t.hashPath), t.nentries())
 }
 
 func (t fullTable) toString(depth uint) string {
@@ -78,7 +78,7 @@ func (t fullTable) LongString(indent string, depth uint) string {
 
 // nentries() is required for tableI
 func (t fullTable) nentries() uint {
-	return BitCount32(t.nodeMap)
+	return bitCount32(t.nodeMap)
 }
 
 // This function MUST return the slice of tableEntry structs from lowest
@@ -127,8 +127,8 @@ func (t fullTable) set(idx uint, nn nodeI) tableI {
 			return nil
 		}
 
-		if BitCount32(nt.nodeMap) < TABLE_CAPACITY/2 {
-			return DowngradeToCompressedTable(nt.hashPath, nt.entries())
+		if bitCount32(nt.nodeMap) < TABLE_CAPACITY/2 {
+			return downgradeToCompressedTable(nt.hashPath, nt.entries())
 		}
 
 	}

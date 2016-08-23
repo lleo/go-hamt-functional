@@ -50,14 +50,18 @@ type tableEntry struct {
 //  was MIT License
 
 const (
-	OCTO_FIVES  = uint32(0x55555555)
-	OCTO_THREES = uint32(0x33333333)
-	OCTO_ONES   = uint32(0x01010101)
-	OCTO_FS     = uint32(0x0f0f0f0f)
+	octo_fives  = uint32(0x55555555)
+	octo_threes = uint32(0x33333333)
+	octo_ones   = uint32(0x01010101)
+	octo_fs     = uint32(0x0f0f0f0f)
 )
 
-func BitCount32(n uint32) uint {
-	n = n - ((n >> 1) & OCTO_FIVES)
-	n = (n & OCTO_THREES) + ((n >> 2) & OCTO_THREES)
-	return uint((((n + (n >> 4)) & OCTO_FS) * OCTO_ONES) >> 24)
+// The bitCount32() function is a software based implementation of the POPCNT
+// instruction. It returns the number of bits set in a uint32 word.
+//
+// This is copied from https://github.com/jddixon/xlUtil_go/blob/master/popCount.go
+func bitCount32(n uint32) uint {
+	n = n - ((n >> 1) & octo_fives)
+	n = (n & octo_threes) + ((n >> 2) & octo_threes)
+	return uint((((n + (n >> 4)) & octo_fs) * octo_ones) >> 24)
 }

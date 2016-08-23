@@ -12,7 +12,7 @@ type flatLeaf struct {
 	val    interface{}
 }
 
-func NewFlatLeaf(h30 uint32, key hamt_key.Key, val interface{}) *flatLeaf {
+func newFlatLeaf(h30 uint32, key hamt_key.Key, val interface{}) *flatLeaf {
 	var fl = new(flatLeaf)
 	fl.hash30 = h30
 	fl.key = key
@@ -27,11 +27,11 @@ func (l flatLeaf) hashcode() uint32 {
 
 // copy() is required for nodeI
 func (l flatLeaf) copy() *flatLeaf {
-	return NewFlatLeaf(l.hash30, l.key, l.val)
+	return newFlatLeaf(l.hash30, l.key, l.val)
 }
 
 func (l flatLeaf) String() string {
-	return fmt.Sprintf("flatLeaf{hash30:%s, key:hamt_key.Key(\"%s\"), val:%v}", Hash30String(l.hash30), l.key, l.val)
+	return fmt.Sprintf("flatLeaf{hash30:%s, key:hamt_key.Key(\"%s\"), val:%v}", hash30String(l.hash30), l.key, l.val)
 }
 
 func (l flatLeaf) get(key hamt_key.Key) (interface{}, bool) {
@@ -45,11 +45,11 @@ func (l flatLeaf) get(key hamt_key.Key) (interface{}, bool) {
 func (l flatLeaf) put(key hamt_key.Key, val interface{}) (leafI, bool) {
 	if l.key.Equals(key) {
 		h30 := key.Hash30()
-		nl := NewFlatLeaf(h30, key, val)
+		nl := newFlatLeaf(h30, key, val)
 		return nl, true
 	}
 
-	var nl = NewCollisionLeaf(l.hash30, []keyVal{keyVal{l.key, l.val}, keyVal{key, val}})
+	var nl = newCollisionLeaf(l.hash30, []keyVal{keyVal{l.key, l.val}, keyVal{key, val}})
 	//var nl = new(collisionLeaf)
 	//nl.hash30 = l.hashcode()
 	//nl.kvs = append(nl.kvs, keyVal{l.key, l.val})
