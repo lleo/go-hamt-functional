@@ -12,7 +12,7 @@ type flatLeaf struct {
 	val    interface{}
 }
 
-func NewFlatLeaf(h60 uint64, key hamt_key.Key, val interface{}) *flatLeaf {
+func newFlatLeaf(h60 uint64, key hamt_key.Key, val interface{}) *flatLeaf {
 	var fl = new(flatLeaf)
 	fl.hash60 = h60
 	fl.key = key
@@ -27,7 +27,7 @@ func (l flatLeaf) hashcode() uint64 {
 
 // copy() is required for nodeI
 func (l flatLeaf) copy() *flatLeaf {
-	return NewFlatLeaf(l.hash60, l.key, l.val)
+	return newFlatLeaf(l.hash60, l.key, l.val)
 }
 
 func (l flatLeaf) String() string {
@@ -45,11 +45,11 @@ func (l flatLeaf) get(key hamt_key.Key) (interface{}, bool) {
 func (l flatLeaf) put(key hamt_key.Key, val interface{}) (leafI, bool) {
 	if l.key.Equals(key) {
 		h60 := key.Hash60()
-		nl := NewFlatLeaf(h60, key, val)
+		nl := newFlatLeaf(h60, key, val)
 		return nl, true
 	}
 
-	var nl = NewCollisionLeaf(l.hash60, []keyVal{keyVal{l.key, l.val}, keyVal{key, val}})
+	var nl = newCollisionLeaf(l.hash60, []keyVal{keyVal{l.key, l.val}, keyVal{key, val}})
 	//var nl = new(collisionLeaf)
 	//nl.hash60 = l.hashcode()
 	//nl.kvs = append(nl.kvs, keyVal{l.key, l.val})

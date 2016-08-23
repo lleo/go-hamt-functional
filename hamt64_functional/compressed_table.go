@@ -22,7 +22,7 @@ import (
 // in the nodeMap. You can count the number of bits in the nodeMap, a 64bit word,
 // by calculating the Hamming Weight (another obscure name; google it). The
 // simple most generice way of calculating the Hamming Weight of a 64bit work is
-// implemented in the BitCount64(uint64) function defined bellow.
+// implemented in the bitCount64(uint64) function defined bellow.
 //
 // To figure out the index of a node in the nodes slice from the index of the bit
 // in the nodeMap we first find out if that bit in the nodeMap is set by
@@ -99,13 +99,13 @@ func newCompressedTable2(depth uint, hashPath uint64, leaf1 leafI, leaf2 flatLea
 	return retTable
 }
 
-// DowngradeToCompressedTable() converts fullTable structs that have less than
+// downgradeToCompressedTable() converts fullTable structs that have less than
 // TABLE_CAPACITY/2 tableEntry's. One important thing we know is that none of
 // the entries will collide with another.
 //
 // The ents []tableEntry slice is guaranteed to be in order from lowest idx to
 // highest. tableI.entries() also adhears to this contract.
-func DowngradeToCompressedTable(hashPath uint64, ents []tableEntry) *compressedTable {
+func downgradeToCompressedTable(hashPath uint64, ents []tableEntry) *compressedTable {
 	var nt = new(compressedTable)
 	nt.hashPath = hashPath
 	//nt.nodeMap = 0
@@ -167,7 +167,7 @@ func (t compressedTable) LongString(indent string, depth uint) string {
 }
 
 func (t compressedTable) nentries() uint {
-	return BitCount64(t.nodeMap)
+	return bitCount64(t.nodeMap)
 }
 
 // This function MUST return the slice of tableEntry structs from lowest
@@ -199,7 +199,7 @@ func (t compressedTable) get(idx uint) nodeI {
 	var m = uint64(1<<idx) - 1
 
 	// Count the number of bits in the nodeMap below the idx'th bit
-	var i = BitCount64(t.nodeMap & m)
+	var i = bitCount64(t.nodeMap & m)
 
 	var node = t.nodes[i]
 
@@ -214,7 +214,7 @@ func (t compressedTable) set(idx uint, nn nodeI) tableI {
 	var bitMask = nodeBit - 1      // mask all bits below the idx'th bit
 
 	// Calculate the index into compressedTable.nodes[] for this entry
-	var i = BitCount64(t.nodeMap & bitMask)
+	var i = bitCount64(t.nodeMap & bitMask)
 
 	if nn != nil {
 		if (t.nodeMap & nodeBit) == 0 {
@@ -223,9 +223,9 @@ func (t compressedTable) set(idx uint, nn nodeI) tableI {
 			// insert newnode into the i'th spot of nt.nodes[]
 			nt.nodes = append(nt.nodes[:i], append([]nodeI{nn}, nt.nodes[i:]...)...)
 
-			if BitCount64(nt.nodeMap) >= TABLE_CAPACITY/2 {
+			if bitCount64(nt.nodeMap) >= TABLE_CAPACITY/2 {
 				// promote compressedTable to fullTable
-				return UpgradeToFullTable(nt.hashPath, nt.entries())
+				return upgradeToFullTable(nt.hashPath, nt.entries())
 			}
 		} else /* if (t.nodeMap & nodeBit) > 0 */ {
 			// don't need to touch nt.nodeMap

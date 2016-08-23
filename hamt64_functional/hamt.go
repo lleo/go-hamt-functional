@@ -1,26 +1,20 @@
 /*
-Package hamt implements a functional Hash Array Mapped Trie (HAMT). Functional
-is defined as immutable and persistent. FIXME more explanation.
+Package hamt64_functional implements a functional Hash Array Mapped Trie (HAMT).
+It is called hamt64_functional because this package is using 64bits of hash for
+the indexes into each level of the Trie. The term functional is used to imply
+immutable and persistent.
 
-A Hash Array Mapped Trie (HAMT) is a data structure to map a key (a byte slice)
-to value (a interface{}; for a generic item). To do this we use a Trie data-
-structure; where each node has a table of SIZE sub-nodes; where each sub-node is
-a new table or a leaf; leaf's contain the key/value pairs.
+All 64bits of the hash is used as we fold the 4 high bits into the lower 60bits
+as described in http://www.isthe.com/chongo/tech/comp/fnv/index.html#xor-fold .
 
-We take a byte slice key and hash it into a 64 bit value. We split the hash value
-into ten 6-bit values. Each 6-bit values is used as an index into a 64 entry
-table for each node in the Trie structure. For each index, if there is no
-collision (ie. no previous entry) in that Trie nodes table's position, then we
-put a leaf (aka a value entry); if there is a collision, then we put a new node
-table of the Trie structure and use the next 6-bits of the hash value to
-calculate the index into that table. This means that the Trie is at most ten
-levels deap, AND only as deep as is needed; for savings in memory and access
-time. Algorithmically, this allows for a O(1) hash table.
+The 60bits of hash are separated into ten 6bit values that constitue the hash
+path of any Key in this Trie. However, not all ten levels of the Trie are used.
+As many levels (ten or less) are used to find a unique location for the leaf to
+be placed within the Trie.
 
-We use go's "hash/fnv" FNV1 implementation for the hash.
-
-Typically HAMT's can be implemented in 64/6 bit and 32/5 bit versions. I've
-implemented this as a 64/6 bit version.
+If all ten levels of the Trie are used for two or more key/val pairs then a
+special collision leaf will be found at the tenth level of the Trie. It keeps
+all key/val pairs in a slice.
 */
 package hamt64_functional
 
@@ -49,14 +43,13 @@ const TABLE_CAPACITY uint = 1 << NBITS
 
 const mask60 = 1<<60 - 1
 
-// The maximum depthof a HAMT ranges between 0 and 9, for 10 levels
-// total and cunsumes 60 of the 64 bit hashcode.
+// The maximum depthof a HAMT ranges between 0 and 9, for 10 levels total.
 const MAXDEPTH uint = 9
 
-const ASSERT_CONST bool = true
+const assert_const bool = true
 
-func ASSERT(test bool, msg string) {
-	if ASSERT_CONST {
+func assert(test bool, msg string) {
+	if assert_const {
 		if !test {
 			panic(msg)
 		}
@@ -137,6 +130,8 @@ type Hamt struct {
 	nentries uint
 }
 
+// The EMPTY Hamt struct is also the zero value of the Hamt struct and represents
+// an empty Hash Arry Mapped Trie.
 var EMPTY = Hamt{nil, 0}
 
 func (h Hamt) String() string {
@@ -223,13 +218,14 @@ func (h Hamt) Get(key hamt_key.Key) (interface{}, bool) {
 	return nil, false
 }
 
+// Hamt.Put(key, val) returns a new Hamt structure and FIXME
 func (h Hamt) Put(key hamt_key.Key, val interface{}) (Hamt, bool) {
 	var nh = h.copy()
 	var inserted = true //true == inserted key/val pair; false == replaced val
 
 	var h60 = key.Hash60()
 	var depth uint = 0
-	var newLeaf = NewFlatLeaf(h60, key, val)
+	var newLeaf = newFlatLeaf(h60, key, val)
 
 	if h.IsEmpty() {
 		nh.root = newCompressedTable(depth, h60, newLeaf)
@@ -275,7 +271,7 @@ func (h Hamt) Put(key hamt_key.Key, val interface{}) (Hamt, bool) {
 			// idx onto hashPath, you must add +1 to the depth.
 			hashPath = buildHashPath(hashPath, idx, depth)
 
-			var newLeaf = NewFlatLeaf(h60, key, val)
+			var newLeaf = newFlatLeaf(h60, key, val)
 
 			//Can I calculate the hashPath from path? Should I go there? ;}
 
@@ -303,7 +299,7 @@ func (h Hamt) Put(key hamt_key.Key, val interface{}) (Hamt, bool) {
 
 // Hamt.Del(key) returns a new Hamt, the value deleted, and a boolean that
 // specifies whether or not the key was deleted (eg it didn't exist to start
-// with). Therefor you must always test deleted before using the new *Hamt
+// with). Therefor you must always test deleted before using the new Hamt
 // value.
 func (h Hamt) Del(key hamt_key.Key) (Hamt, interface{}, bool) {
 	var nh = h.copy()

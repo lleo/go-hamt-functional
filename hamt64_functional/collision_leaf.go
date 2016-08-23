@@ -12,7 +12,7 @@ type collisionLeaf struct {
 	kvs    []keyVal
 }
 
-func NewCollisionLeaf(hash uint64, kvs []keyVal) *collisionLeaf {
+func newCollisionLeaf(hash uint64, kvs []keyVal) *collisionLeaf {
 	leaf := new(collisionLeaf)
 	leaf.hash60 = hash & mask60
 	leaf.kvs = append(leaf.kvs, kvs...)
@@ -70,10 +70,10 @@ func (l collisionLeaf) put(key hamt_key.Key, val interface{}) (leafI, bool) {
 func (l collisionLeaf) del(key hamt_key.Key) (leafI, interface{}, bool) {
 	if len(l.kvs) == 2 {
 		if l.kvs[0].key.Equals(key) {
-			return NewFlatLeaf(l.hash60, l.kvs[1].key, l.kvs[1].val), l.kvs[0].val, true
+			return newFlatLeaf(l.hash60, l.kvs[1].key, l.kvs[1].val), l.kvs[0].val, true
 		}
 		if l.kvs[1].key.Equals(key) {
-			return NewFlatLeaf(l.hash60, l.kvs[0].key, l.kvs[0].val), l.kvs[1].val, true
+			return newFlatLeaf(l.hash60, l.kvs[0].key, l.kvs[0].val), l.kvs[1].val, true
 		}
 		return nil, nil, false
 	}
