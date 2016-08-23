@@ -31,7 +31,7 @@ import (
 // there is a function to calculate the index called index(hash, depth);
 //
 type compressedTable struct {
-	hashPath uint64 // depth*NBITS64 of hash to get to this location in the Trie
+	hashPath uint64 // depth*NBITS of hash to get to this location in the Trie
 	nodeMap  uint64
 	nodes    []nodeI
 }

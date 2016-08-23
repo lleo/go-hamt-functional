@@ -11,7 +11,7 @@ package hamt64_functional
 // The hashcode() method for leaf structs is the 60 most significant bits of
 // the keys hash.
 //
-// The hashcode() method for table structs is the depth*NBITS64 of the hash path
+// The hashcode() method for table structs is the depth*NBITS of the hash path
 // that leads to the table's position in the Trie.
 //
 // For leafs hashcode() is the 60 bits returned by hash60(key).
