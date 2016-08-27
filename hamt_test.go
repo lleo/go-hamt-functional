@@ -1,12 +1,12 @@
-package hamt_functional
+package hamt
 
 import (
 	"math/rand"
 	"os"
 	"testing"
 
-	hamt32 "github.com/lleo/go-hamt-functional/hamt32_functional"
-	hamt64 "github.com/lleo/go-hamt-functional/hamt64_functional"
+	"github.com/lleo/go-hamt-functional/hamt32"
+	"github.com/lleo/go-hamt-functional/hamt64"
 	"github.com/lleo/go-hamt/string_key"
 
 	"github.com/lleo/stringutil"

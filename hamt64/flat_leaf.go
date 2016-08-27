@@ -1,18 +1,18 @@
-package hamt64_functional
+package hamt64
 
 import (
 	"fmt"
 
-	"github.com/lleo/go-hamt/hamt_key"
+	"github.com/lleo/go-hamt/key"
 )
 
 type flatLeaf struct {
 	hash60 uint64 //hash60(key)
-	key    hamt_key.Key
+	key    key.Key
 	val    interface{}
 }
 
-func newFlatLeaf(h60 uint64, key hamt_key.Key, val interface{}) *flatLeaf {
+func newFlatLeaf(h60 uint64, key key.Key, val interface{}) *flatLeaf {
 	var fl = new(flatLeaf)
 	fl.hash60 = h60
 	fl.key = key
@@ -31,10 +31,10 @@ func (l flatLeaf) copy() *flatLeaf {
 }
 
 func (l flatLeaf) String() string {
-	return fmt.Sprintf("flatLeaf{hash60:%s, key:hamt_key.Key(\"%s\"), val:%v}", hash60String(l.hash60), l.key, l.val)
+	return fmt.Sprintf("flatLeaf{hash60:%s, key:key.Key(\"%s\"), val:%v}", hash60String(l.hash60), l.key, l.val)
 }
 
-func (l flatLeaf) get(key hamt_key.Key) (interface{}, bool) {
+func (l flatLeaf) get(key key.Key) (interface{}, bool) {
 	if l.key.Equals(key) {
 		return l.val, true
 	}
@@ -42,7 +42,7 @@ func (l flatLeaf) get(key hamt_key.Key) (interface{}, bool) {
 }
 
 // nentries() is required for tableI
-func (l flatLeaf) put(key hamt_key.Key, val interface{}) (leafI, bool) {
+func (l flatLeaf) put(key key.Key, val interface{}) (leafI, bool) {
 	if l.key.Equals(key) {
 		h60 := key.Hash60()
 		nl := newFlatLeaf(h60, key, val)
@@ -57,7 +57,7 @@ func (l flatLeaf) put(key hamt_key.Key, val interface{}) (leafI, bool) {
 	return nl, false //didn't replace
 }
 
-func (l flatLeaf) del(key hamt_key.Key) (leafI, interface{}, bool) {
+func (l flatLeaf) del(key key.Key) (leafI, interface{}, bool) {
 	if l.key.Equals(key) {
 		return nil, l.val, true //deleted entry
 	}

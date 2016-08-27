@@ -1,4 +1,4 @@
-package hamt32_functional
+package hamt32
 
 import "strings"
 

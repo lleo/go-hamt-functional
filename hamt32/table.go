@@ -1,4 +1,4 @@
-package hamt32_functional
+package hamt32
 
 // nodeI is the interface for every entry in a table; so table entries are
 // either a leaf or a table or nil.

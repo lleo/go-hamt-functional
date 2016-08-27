@@ -1,33 +1,33 @@
-package hamt64_functional
+package hamt32
 
 import (
 	"fmt"
 	"strings"
 
-	"github.com/lleo/go-hamt/hamt_key"
+	"github.com/lleo/go-hamt/key"
 )
 
 type collisionLeaf struct {
-	hash60 uint64 //hash60(key)
+	hash30 uint32 //hash30(key)
 	kvs    []keyVal
 }
 
-func newCollisionLeaf(hash uint64, kvs []keyVal) *collisionLeaf {
+func newCollisionLeaf(hash uint32, kvs []keyVal) *collisionLeaf {
 	leaf := new(collisionLeaf)
-	leaf.hash60 = hash & mask60
+	leaf.hash30 = hash & mask30
 	leaf.kvs = append(leaf.kvs, kvs...)
 
 	return leaf
 }
 
-func (l collisionLeaf) hashcode() uint64 {
-	return l.hash60
+func (l collisionLeaf) hashcode() uint32 {
+	return l.hash30
 }
 
 //is this needed?
 func (l collisionLeaf) copy() *collisionLeaf {
 	var nl = new(collisionLeaf)
-	nl.hash60 = l.hash60
+	nl.hash30 = l.hash30
 	nl.kvs = append(nl.kvs, l.kvs...)
 	return nl
 }
@@ -39,10 +39,10 @@ func (l collisionLeaf) String() string {
 	}
 	var jkvstr = strings.Join(kvstrs, ",")
 
-	return fmt.Sprintf("{hash60:%s, kvs:[]kv{%s}}", hash60String(l.hash60), jkvstr)
+	return fmt.Sprintf("{hash30:%s, kvs:[]kv{%s}}", hash30String(l.hash30), jkvstr)
 }
 
-func (l collisionLeaf) get(key hamt_key.Key) (interface{}, bool) {
+func (l collisionLeaf) get(key key.Key) (interface{}, bool) {
 	for i := 0; i < len(l.kvs); i++ {
 		if l.kvs[i].key.Equals(key) {
 			return l.kvs[i].val, true
@@ -51,9 +51,9 @@ func (l collisionLeaf) get(key hamt_key.Key) (interface{}, bool) {
 	return nil, false
 }
 
-func (l collisionLeaf) put(key hamt_key.Key, val interface{}) (leafI, bool) {
+func (l collisionLeaf) put(key key.Key, val interface{}) (leafI, bool) {
 	nl := new(collisionLeaf)
-	nl.hash60 = l.hash60
+	nl.hash30 = l.hash30
 	nl.kvs = append(nl.kvs, l.kvs...)
 
 	for i := 0; i < len(l.kvs); i++ {
@@ -67,13 +67,13 @@ func (l collisionLeaf) put(key hamt_key.Key, val interface{}) (leafI, bool) {
 	return nl, true // key,val was added
 }
 
-func (l collisionLeaf) del(key hamt_key.Key) (leafI, interface{}, bool) {
+func (l collisionLeaf) del(key key.Key) (leafI, interface{}, bool) {
 	if len(l.kvs) == 2 {
 		if l.kvs[0].key.Equals(key) {
-			return newFlatLeaf(l.hash60, l.kvs[1].key, l.kvs[1].val), l.kvs[0].val, true
+			return newFlatLeaf(l.hash30, l.kvs[1].key, l.kvs[1].val), l.kvs[0].val, true
 		}
 		if l.kvs[1].key.Equals(key) {
-			return newFlatLeaf(l.hash60, l.kvs[0].key, l.kvs[0].val), l.kvs[1].val, true
+			return newFlatLeaf(l.hash30, l.kvs[0].key, l.kvs[0].val), l.kvs[1].val, true
 		}
 		return nil, nil, false
 	}

@@ -1,4 +1,4 @@
-package hamt64_functional
+package hamt64
 
 import (
 	"fmt"
