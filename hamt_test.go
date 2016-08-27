@@ -161,7 +161,7 @@ func TestHamt64PutGetTwoTableDeepCollision(t *testing.T) {
 	h, _ = h.Put(string_key.StringKey("d"), 4)
 	h, _ = h.Put(string_key.StringKey("aa"), 27)
 
-	t.Log("h =\n%s", h.LongString(""))
+	t.Logf("h =\n%s", h.LongString(""))
 
 	var val interface{}
 	var found bool
@@ -196,14 +196,14 @@ func TestHamt64PutManyGetMany(t *testing.T) {
 
 	for i := 0; i < 64; i++ {
 		var key = midKvs[i].key
-		var expected_val = midKvs[i].val
+		var expectedVal = midKvs[i].val
 
 		var val, found = h.Get(key)
 		if !found {
 			t.Errorf("Did NOT find val for key=\"%s\"", key)
 		}
-		if val != expected_val {
-			t.Errorf("val,%d != expected_val,%d", val, expected_val)
+		if val != expectedVal {
+			t.Errorf("val,%d != expectedVal,%d", val, expectedVal)
 		}
 	}
 }
@@ -376,7 +376,7 @@ func TestHamt64PutManyDelManyIsEmpty(t *testing.T) {
 
 	for i := 0; i < 64; i++ {
 		var key = midKvs[i].key
-		var expected_val = midKvs[i].val
+		var expectedVal = midKvs[i].val
 
 		var val interface{}
 		var deleted bool
@@ -384,8 +384,8 @@ func TestHamt64PutManyDelManyIsEmpty(t *testing.T) {
 		if !deleted {
 			t.Fatalf("Did NOT find&delete for key=\"%s\"; hence h no longer valid", key)
 		}
-		if val != expected_val {
-			t.Errorf("val,%d != expected_val,%d", val, expected_val)
+		if val != expectedVal {
+			t.Errorf("val,%d != expectedVal,%d", val, expectedVal)
 		}
 
 		t.Log("h =\n", h.LongString(""))
@@ -430,7 +430,7 @@ func TestHamt64PutDelHugeIsEmpty(t *testing.T) {
 
 	for i := 0; i < numHugeKvs; i++ {
 		var key = hugeKvs[i].key
-		var expected_val = hugeKvs[i].val
+		var expectedVal = hugeKvs[i].val
 
 		//var h1 hamt64.Hamt
 		//var val interface{}
@@ -439,8 +439,8 @@ func TestHamt64PutDelHugeIsEmpty(t *testing.T) {
 		if !deleted {
 			t.Errorf("Did NOT find&delete for key=\"%s\"", key)
 		}
-		if val != expected_val {
-			t.Errorf("val,%d != expected_val,%d", val, expected_val)
+		if val != expectedVal {
+			t.Errorf("val,%d != expectedVal,%d", val, expectedVal)
 		}
 		h = h1
 	}
@@ -488,7 +488,7 @@ func TestHamt32PutDelHugeIsEmpty(t *testing.T) {
 
 	for i := 0; i < numHugeKvs; i++ {
 		var key = hugeKvs[i].key
-		var expected_val = hugeKvs[i].val
+		var expectedVal = hugeKvs[i].val
 
 		//var h1 hamt64.Hamt
 		//var val interface{}
@@ -497,8 +497,8 @@ func TestHamt32PutDelHugeIsEmpty(t *testing.T) {
 		if !deleted {
 			t.Errorf("Did NOT find&delete for key=\"%s\"", key)
 		}
-		if val != expected_val {
-			t.Errorf("val,%d != expected_val,%d", val, expected_val)
+		if val != expectedVal {
+			t.Errorf("val,%d != expectedVal,%d", val, expectedVal)
 		}
 		h = h1
 	}
@@ -530,7 +530,7 @@ func BenchmarkMapGet(b *testing.B) {
 		var j = int(rand.Int31()) % numHugeKvs
 		var s = hugeKvs[j].key.String()
 		var v = M[s]
-		v += 1
+		v += 1 //screw golint! it recommends v++ and I hate v++ !
 	}
 }
 
