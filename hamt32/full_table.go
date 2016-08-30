@@ -7,18 +7,16 @@ import (
 
 type fullTable struct {
 	hashPath uint32 // depth*NBITS of hash to get to this location in the Trie
-	nodeMap  uint32
 	nodes    [TABLE_CAPACITY]nodeI
+	numEnts  uint
 }
 
 func upgradeToFullTable(hashPath uint32, tabEnts []tableEntry) tableI {
 	var ft = new(fullTable)
 	ft.hashPath = hashPath
-	//ft.nodeMap = 0 //unnecessary
+	ft.numEnts = uint(len(tabEnts))
 
 	for _, ent := range tabEnts {
-		var nodeBit = uint32(1 << ent.idx)
-		ft.nodeMap |= nodeBit
 		ft.nodes[ent.idx] = ent.node
 	}
 
@@ -34,7 +32,7 @@ func (t fullTable) hashcode() uint32 {
 func (t fullTable) copy() *fullTable {
 	var nt = new(fullTable)
 	nt.hashPath = t.hashPath
-	nt.nodeMap = t.nodeMap
+	nt.numEnts = t.numEnts
 	for i := 0; i < len(t.nodes); i++ {
 		nt.nodes[i] = t.nodes[i]
 	}
@@ -53,11 +51,9 @@ func (t fullTable) toString(depth uint) string {
 
 // LongString() is required for tableI
 func (t fullTable) LongString(indent string, depth uint) string {
-	var strs = make([]string, 3+len(t.nodes))
+	var strs = make([]string, 2+len(t.nodes))
 
 	strs[0] = indent + fmt.Sprintf("fullTable{hashPath:%s, nentries()=%d", hashPathString(t.hashPath, depth), t.nentries())
-
-	strs[1] = indent + "\tnodeMap=" + nodeMapString(t.nodeMap) + ","
 
 	for i, n := range t.nodes {
 		if t.nodes[i] == nil {
@@ -78,7 +74,7 @@ func (t fullTable) LongString(indent string, depth uint) string {
 
 // nentries() is required for tableI
 func (t fullTable) nentries() uint {
-	return bitCount32(t.nodeMap)
+	return t.numEnts
 }
 
 // This function MUST return the slice of tableEntry structs from lowest
@@ -87,8 +83,7 @@ func (t fullTable) entries() []tableEntry {
 	var n = t.nentries()
 	var ents = make([]tableEntry, n)
 	for i, j := uint(0), 0; i < TABLE_CAPACITY; i++ {
-		var nodeBit = uint32(1 << i)
-		if (t.nodeMap & nodeBit) > 0 {
+		if t.nodes[i] != nil {
 			//The difference with compressedTable is t.nodes[i] vs. t.nodes[j]
 			ents[j] = tableEntry{i, t.nodes[i]}
 			j++
@@ -99,12 +94,6 @@ func (t fullTable) entries() []tableEntry {
 
 // get(uint32) is required for tableI
 func (t fullTable) get(idx uint) nodeI {
-	var nodeBit = uint32(1 << idx)
-
-	if (t.nodeMap & nodeBit) == 0 {
-		return nil
-	}
-
 	var node = t.nodes[idx]
 
 	return node
@@ -114,20 +103,28 @@ func (t fullTable) get(idx uint) nodeI {
 func (t fullTable) set(idx uint, nn nodeI) tableI {
 	var nt = t.copy()
 
-	var nodeBit = uint32(1 << idx)
+	var occupied = false
+	if nt.nodes[idx] != nil {
+		occupied = true
+	}
 
 	if nn != nil {
-		nt.nodeMap |= nodeBit
 		nt.nodes[idx] = nn
+		if !occupied {
+			nt.numEnts += 1
+		}
 	} else /* if nn == nil */ {
-		nt.nodeMap &^= nodeBit
 		nt.nodes[idx] = nn
 
-		if nt.nodeMap == 0 {
+		if occupied {
+			nt.numEnts -= 1
+		}
+
+		if nt.numEnts == 0 {
 			return nil
 		}
 
-		if bitCount32(nt.nodeMap) < TABLE_CAPACITY/2 {
+		if nt.numEnts < TABLE_CAPACITY/2 {
 			return downgradeToCompressedTable(nt.hashPath, nt.entries())
 		}
 
