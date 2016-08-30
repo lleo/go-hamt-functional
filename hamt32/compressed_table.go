@@ -223,7 +223,7 @@ func (t compressedTable) set(idx uint, nn nodeI) tableI {
 			// insert newnode into the i'th spot of nt.nodes[]
 			nt.nodes = append(nt.nodes[:i], append([]nodeI{nn}, nt.nodes[i:]...)...)
 
-			if bitCount32(nt.nodeMap) >= TABLE_CAPACITY/2 {
+			if uint(len(nt.nodes)) >= TABLE_CAPACITY/2 {
 				// promote compressedTable to fullTable
 				return upgradeToFullTable(nt.hashPath, nt.entries())
 			}
