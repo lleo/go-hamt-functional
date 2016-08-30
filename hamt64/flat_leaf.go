@@ -42,18 +42,15 @@ func (l flatLeaf) get(key key.Key) (interface{}, bool) {
 }
 
 // nentries() is required for tableI
-func (l flatLeaf) put(key key.Key, val interface{}) (leafI, bool) {
-	if l.key.Equals(key) {
-		h60 := key.Hash60()
-		nl := newFlatLeaf(h60, key, val)
+func (l flatLeaf) put(k key.Key, v interface{}) (leafI, bool) {
+	if l.key.Equals(k) {
+		h60 := key.Hash60(k)
+		nl := newFlatLeaf(h60, k, v)
 		return nl, true
 	}
 
-	var nl = newCollisionLeaf(l.hash60, []keyVal{keyVal{l.key, l.val}, keyVal{key, val}})
-	//var nl = new(collisionLeaf)
-	//nl.hash60 = l.hashcode()
-	//nl.kvs = append(nl.kvs, keyVal{l.key, l.val})
-	//nl.kvs = append(nl.kvs, keyVal{key, val})
+	var nl = newCollisionLeaf(l.hash60, []keyVal{keyVal{l.key, l.val}, keyVal{k, v}})
+
 	return nl, false //didn't replace
 }
 

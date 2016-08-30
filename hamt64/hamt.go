@@ -180,14 +180,14 @@ func (h *Hamt) copyUp(oldTable, newTable tableI, path pathT) {
 	return
 }
 
-// Get(key) retrieves the value for a given key from the Hamt. The bool
+// Get(k) retrieves the value for a given key from the Hamt. The bool
 // represents whether the key was found.
-func (h Hamt) Get(key key.Key) (interface{}, bool) {
+func (h Hamt) Get(k key.Key) (interface{}, bool) {
 	if h.IsEmpty() {
 		return nil, false
 	}
 
-	var h60 = key.Hash60()
+	var h60 = key.Hash60(k)
 
 	// We know h.root != nil (above IsEmpty test) and h.root is a tableI
 	// intrface compliant struct.
@@ -205,7 +205,7 @@ func (h Hamt) Get(key key.Key) (interface{}, bool) {
 		if leaf, ok := curNode.(leafI); ok {
 			//if hashPathEqual(depth, h60, leaf.hashcode()) {
 			if leaf.hashcode() == h60 {
-				return leaf.get(key)
+				return leaf.get(k)
 			}
 			return nil, false
 		}
@@ -218,14 +218,14 @@ func (h Hamt) Get(key key.Key) (interface{}, bool) {
 	return nil, false
 }
 
-// Hamt.Put(key, val) returns a new Hamt structure and FIXME
-func (h Hamt) Put(key key.Key, val interface{}) (Hamt, bool) {
+// Hamt.Put(k, v) returns a new Hamt structure and FIXME
+func (h Hamt) Put(k key.Key, v interface{}) (Hamt, bool) {
 	var nh = h.copy()
 	var inserted = true //true == inserted key/val pair; false == replaced val
 
-	var h60 = key.Hash60()
+	var h60 = key.Hash60(k)
 	var depth uint = 0
-	var newLeaf = newFlatLeaf(h60, key, val)
+	var newLeaf = newFlatLeaf(h60, k, v)
 
 	if h.IsEmpty() {
 		nh.root = newCompressedTable(depth, h60, newLeaf)
@@ -251,10 +251,10 @@ func (h Hamt) Put(key key.Key, val interface{}) (Hamt, bool) {
 		if oldLeaf, ok := curNode.(leafI); ok {
 
 			if oldLeaf.hashcode() == h60 {
-				log.Printf("HOLY SHIT!!! Two keys collided with this same hash60 orig key=\"%s\" new key=\"%s\" h60=0x%016x", oldLeaf.(flatLeaf).key, key, h60)
+				log.Printf("HOLY SHIT!!! Two keys collided with this same hash60 orig key=\"%s\" new key=\"%s\" h60=0x%016x", oldLeaf.(flatLeaf).key, k, h60)
 
 				var newLeaf leafI
-				newLeaf, inserted = oldLeaf.put(key, val)
+				newLeaf, inserted = oldLeaf.put(k, v)
 				if inserted {
 					nh.nentries++
 				}
@@ -271,7 +271,7 @@ func (h Hamt) Put(key key.Key, val interface{}) (Hamt, bool) {
 			// idx onto hashPath, you must add +1 to the depth.
 			hashPath = buildHashPath(hashPath, idx, depth)
 
-			var newLeaf = newFlatLeaf(h60, key, val)
+			var newLeaf = newFlatLeaf(h60, k, v)
 
 			//Can I calculate the hashPath from path? Should I go there? ;}
 
@@ -297,16 +297,16 @@ func (h Hamt) Put(key key.Key, val interface{}) (Hamt, bool) {
 	return *nh, inserted
 }
 
-// Hamt.Del(key) returns a new Hamt, the value deleted, and a boolean that
+// Hamt.Del(k) returns a new Hamt, the value deleted, and a boolean that
 // specifies whether or not the key was deleted (eg it didn't exist to start
 // with). Therefor you must always test deleted before using the new Hamt
 // value.
-func (h Hamt) Del(key key.Key) (Hamt, interface{}, bool) {
+func (h Hamt) Del(k key.Key) (Hamt, interface{}, bool) {
 	var nh = h.copy()
-	var val interface{}
+	var v interface{}
 	var deleted bool
 
-	var h60 = key.Hash60()
+	var h60 = key.Hash60(k)
 	var depth uint = 0
 
 	var path = newPathT()
@@ -323,15 +323,15 @@ func (h Hamt) Del(key key.Key) (Hamt, interface{}, bool) {
 		if oldLeaf, ok := curNode.(leafI); ok {
 			if oldLeaf.hashcode() != h60 {
 				// Found a leaf, but not the leaf I was looking for.
-				log.Printf("h.Del(%q): depth=%d; h60=%s", key, depth, hash60String(h60))
-				log.Printf("h.Del(%q): idx=%d", key, idx)
-				log.Printf("h.Del(%q): curTable=\n%s", key, curTable.LongString("", depth))
-				log.Printf("h.Del(%q): Found a leaf, but not the leaf I was looking for; depth=%d; idx=%d; oldLeaf=%s", key, depth, idx, oldLeaf)
+				log.Printf("h.Del(%q): depth=%d; h60=%s", k, depth, hash60String(h60))
+				log.Printf("h.Del(%q): idx=%d", k, idx)
+				log.Printf("h.Del(%q): curTable=\n%s", k, curTable.LongString("", depth))
+				log.Printf("h.Del(%q): Found a leaf, but not the leaf I was looking for; depth=%d; idx=%d; oldLeaf=%s", k, depth, idx, oldLeaf)
 				return h, nil, false
 			}
 
 			var newLeaf leafI
-			newLeaf, val, deleted = oldLeaf.del(key)
+			newLeaf, v, deleted = oldLeaf.del(k)
 
 			//var idx = index(oldLeaf.hashcode(), depth)
 			var newTable = curTable.set(idx, newLeaf)
@@ -342,7 +342,7 @@ func (h Hamt) Del(key key.Key) (Hamt, interface{}, bool) {
 				nh.nentries--
 			}
 
-			return *nh, val, deleted
+			return *nh, v, deleted
 		}
 
 		// curTable now becomes the parentTable and we push it on to the path
