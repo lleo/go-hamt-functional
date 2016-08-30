@@ -4,7 +4,7 @@ functional Hash Array Mapped Trie (HAMT) datastructure.
 
 In this case, functional means immutable and persistent. "immutable" means
 that the datastructure is is never changed after construction. Where
-"persistent" means that when a new HAMT structure is build, based on a
+"persistent" means that when a new HAMT structure is built, based on a
 previous datastructure, that new datastructure shares all un-modified parts
 of the "parent" datastructure. The changes in a "persistent" datastructure
 are the leaf and up each interior node along the path up to the root.

@@ -1,6 +1,6 @@
 /*
-Package hamt32_functional implements a functional Hash Array Mapped Trie (HAMT).
-It is called hamt32_functional because this package is using 32bits of hash for
+Package hamt32 implements a functional Hash Array Mapped Trie (HAMT).
+It is called hamt32 because this package is using 32bits of hash for
 the indexes into each level of the Trie. The term functional is used to imply
 immutable and persistent.
 
