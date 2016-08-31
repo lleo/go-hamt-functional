@@ -9,12 +9,3 @@ type leafI interface {
 	del(key key.Key) (leafI, interface{}, bool)     //bool == deleted? key
 	keyVals() []keyVal
 }
-
-//type keyVal struct {
-//	key key.Key
-//	val interface{}
-//}
-//
-//func (kv keyVal) String() string {
-//	return fmt.Sprintf("{key.Key(\"%s\"), val:%v}", kv.key, kv.val)
-//}
