@@ -351,7 +351,7 @@ func (h Hamt) Del(k key.Key) (Hamt, interface{}, bool) {
 		// the curNode MUST BE a tableI so we coerce and set it to curTable
 		curTable = curNode.(tableI)
 	}
-	// depth == MAXDEPTH+1 & no leaf with key was found
+	// depth > MAXDEPTH & no leaf with key was found
 	// So after a thourough search no key/value exists to delete.
 
 	return h, nil, false
