@@ -33,17 +33,17 @@ func init() {
 	log.SetFlags(log.Lshortfile)
 }
 
-// The number of bits to partition the hashcode and to index each table. By
-// logical necessity this MUST be 6 bits because 2^6 == 64; the number of
-// entries in a table.
+// NBITS constant is the number of bits, 6bits, a 60bit hash value is split
+// into to provied the indexes of a HAMT.
 const NBITS uint = 6
 
-// The Capacity of a table; 2^6 == 64;
+// MAXDEPTH constant is the maximum depth(9) of NBITS values that constitute
+// the path in a HAMT, from [0..MAXDEPTH] for a total of MAXDEPTH+1(10) levels.
+// NBITS*(MAXDEPTH+1) == HASHBITS (ie 6*(9+1) == 60).
 const TABLE_CAPACITY uint = 1 << NBITS
 
-const mask60 = 1<<60 - 1
-
-// The maximum depthof a HAMT ranges between 0 and 9, for 10 levels total.
+// TABLE_CAPACITY constant is the number of table entries in a each node of
+// a HAMT datastructure; its value is 1<<NBITS (ie 2^6 == 64).
 const MAXDEPTH uint = 9
 
 const assert_const bool = true
