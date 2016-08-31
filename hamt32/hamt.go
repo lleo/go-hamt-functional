@@ -81,7 +81,7 @@ func hashPathString(hashPath uint32, depth uint) string {
 }
 
 func hash30String(h30 uint32) string {
-	return hashPathString(h30, MAXDEPTH)
+	return hashPathString(h30, MAXDEPTH+1)
 }
 
 func nodeMapString(nodeMap uint32) string {
