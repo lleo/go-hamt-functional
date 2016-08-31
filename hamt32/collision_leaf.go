@@ -14,7 +14,7 @@ type collisionLeaf struct {
 
 func newCollisionLeaf(hash uint32, kvs []keyVal) *collisionLeaf {
 	leaf := new(collisionLeaf)
-	leaf.hash30 = hash & mask30
+	leaf.hash30 = hash
 	leaf.kvs = append(leaf.kvs, kvs...)
 
 	return leaf
