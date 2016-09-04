@@ -28,7 +28,7 @@ is created, as well as it's parent interior node, and a new root node.
 
 	        root tree node   root tree node'
 	            /    \         /   \   	 	
-	           /  +-- \----- +      \ 	   	   	
+	           /  +---\----- +      \ 	   	   	
               /  /     \             \
 	   tree node 1   tree node 2  tree node 2'
 	  	  /  \          /  \        /   \
@@ -48,4 +48,24 @@ we use Arrays 64 entries deep and the hash value is chopped into 10 groups of
 6 bits each. Each bit group is the index into the next table; for 32 bit hash
 values 2^5 == 32; for 64 bit hash values 2^6 == 64.
 
+Lets calculate the 30bit hash value for the key "a". 
 
+	mask30 := uint(1<<30) - 1
+    h := fnv.New32()
+	h.Write([]byte("a"))
+	h32 := h.Sum32() //uint32
+	h30 := (h32 >> 30) ^ (h32 & mask30)
+	fmt.Printf("%d 0x%08x 0b%032b\n", h30, h30, h30)
+
+
+    84696446 0x050c5d7e 0b00000101000011000101110101111110
+
+We can take the lower 30bits of "00000101000011000101110101111110" and split it
+into six 5 bit values betweeen 0-31.
+
+    00010/10000/11000/10111/01011/11110
+	02/16/24/23/11/30
+
+but from lowest bit to highest we reverse the order of the hash path
+
+    /30/11/23/24/16/02
