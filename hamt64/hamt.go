@@ -80,7 +80,7 @@ func hashPathString(hashPath uint64, depth uint) string {
 }
 
 func hash60String(hashPath uint64) string {
-	return hashPathString(hashPath, MAXDEPTH+1)
+	return hashPathString(hashPath, MAXDEPTH)
 }
 
 func nodeMapString(nodeMap uint64) string {

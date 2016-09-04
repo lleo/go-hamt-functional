@@ -73,7 +73,7 @@ func hashPathString(hashPath uint32, depth uint) string {
 	}
 	var strs = make([]string, depth+1)
 
-	for d := int32(depth); d >= 0; d-- {
+	for d := int(depth); d >= 0; d-- {
 		var idx = index(hashPath, uint(d))
 		strs[d] = fmt.Sprintf("%02d", idx)
 	}
@@ -81,7 +81,7 @@ func hashPathString(hashPath uint32, depth uint) string {
 }
 
 func hash30String(h30 uint32) string {
-	return hashPathString(h30, MAXDEPTH+1)
+	return hashPathString(h30, MAXDEPTH)
 }
 
 func nodeMapString(nodeMap uint32) string {
