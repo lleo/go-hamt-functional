@@ -13,8 +13,8 @@ As many levels (six or less) are used to find a unique location
 for the leaf to be placed within the Trie.
 
 If all six levels of the Trie are used for two or more key/val pairs then a
-special collision leaf will be found at the sixth level of the Trie. It keeps
-all key/val pairs in a slice.
+special collision leaf will be used to store those key/val pairs,  at the sixth
+level of the Trie.
 */
 package hamt32
 

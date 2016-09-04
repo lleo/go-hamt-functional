@@ -13,8 +13,8 @@ As many levels (ten or less) are used to find a unique location for the leaf to
 be placed within the Trie.
 
 If all ten levels of the Trie are used for two or more key/val pairs then a
-special collision leaf will be found at the tenth level of the Trie. It keeps
-all key/val pairs in a slice.
+special collision leaf will be used to store those key/val pairs, at the 10nth
+level of the Trie.
 */
 package hamt64
 
@@ -40,11 +40,11 @@ const NBITS uint = 6
 // MAXDEPTH constant is the maximum depth(9) of NBITS values that constitute
 // the path in a HAMT, from [0..MAXDEPTH] for a total of MAXDEPTH+1(10) levels.
 // NBITS*(MAXDEPTH+1) == HASHBITS (ie 6*(9+1) == 60).
-const TABLE_CAPACITY uint = 1 << NBITS
+const MAXDEPTH uint = 9
 
 // TABLE_CAPACITY constant is the number of table entries in a each node of
 // a HAMT datastructure; its value is 1<<NBITS (ie 2^6 == 64).
-const MAXDEPTH uint = 9
+const TABLE_CAPACITY uint = 1 << NBITS
 
 const assert_const bool = true
 
