@@ -57,6 +57,16 @@ func TestMain(m *testing.M) {
 		s1 = s1.DigitalInc(1)
 	}
 
+	//var hugeKvsFile *os.File
+	//hugeKvsFile, err = os.OpenFile("hugeKvs.dat", os.O_CREATE|os.O_WRONLY, 0644)
+	//if err != nil {
+	//	log.Fatal(err)
+	//}
+	//for _, kv := range hugeKvs {
+	//	fmt.Fprintf(hugeKvsFile, "%s\t%d\n", kv.key, kv.val)
+	//}
+	//hugeKvsFile.Close()
+
 	// Build map & hamt
 	M = make(map[string]int)
 	H32 = hamt32.EMPTY
@@ -422,6 +432,8 @@ func TestHamt64PutGetHuge(t *testing.T) {
 func TestHamt64PutDelHugeIsEmpty(t *testing.T) {
 	var h = hamt64.EMPTY
 
+	//var k0 = string_key.StringKey("xema")
+
 	for i := 0; i < numHugeKvs; i++ {
 		h, _ = h.Put(hugeKvs[i].key, hugeKvs[i].val)
 	}
@@ -432,16 +444,22 @@ func TestHamt64PutDelHugeIsEmpty(t *testing.T) {
 		var key = hugeKvs[i].key
 		var expectedVal = hugeKvs[i].val
 
+		//if key.Equals(k0) {
+		//	t.Logf("hit %s", k0)
+		//}
+
 		//var h1 hamt64.Hamt
 		//var val interface{}
 		//var deleted bool
 		var h1, val, deleted = h.Del(key)
 		if !deleted {
 			t.Errorf("Did NOT find&delete for key=\"%s\"", key)
+		} else {
+			if val != expectedVal {
+				t.Errorf("val,%d != expectedVal,%d", val, expectedVal)
+			}
 		}
-		if val != expectedVal {
-			t.Errorf("val,%d != expectedVal,%d", val, expectedVal)
-		}
+
 		h = h1
 	}
 	//t.Log("### Testing compressedTable Shrinkage ###")
