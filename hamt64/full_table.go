@@ -5,6 +5,16 @@ import (
 	"strings"
 )
 
+//var pool *sync.Pool
+//
+//func init() {
+//	pool = new(sync.Pool)
+//	pool.New = func() interface{} {
+//		var ft = new(fullTable)
+//		return ft
+//	}
+//}
+
 type fullTable struct {
 	hashPath uint64 // depth*NBITS of hash to get to this location in the Trie
 	nodes    [TABLE_CAPACITY]nodeI
@@ -15,6 +25,7 @@ func newFullTable(depth uint, hashPath uint64, leaf leafI) tableI {
 	var idx = index(hashPath, depth)
 
 	var ft = new(fullTable)
+	//var ft = pool.Get().(*fullTable)
 	ft.hashPath = hashPath & hashPathMask(depth)
 	ft.numEnts = 1
 	ft.nodes[idx] = leaf
@@ -24,6 +35,7 @@ func newFullTable(depth uint, hashPath uint64, leaf leafI) tableI {
 
 func newFullTable2(depth uint, hashPath uint64, leaf1 leafI, leaf2 flatLeaf) tableI {
 	var retTable = new(fullTable)
+	//var retTable = pool.Get().(*fullTable)
 	retTable.hashPath = hashPath & hashPathMask(depth)
 
 	var curTable = retTable
@@ -45,6 +57,7 @@ func newFullTable2(depth uint, hashPath uint64, leaf1 leafI, leaf2 flatLeaf) tab
 		hashPath = buildHashPath(hashPath, idx1, d)
 
 		var newTable = new(fullTable)
+		//var newTable = pool.Get().(*fullTable)
 		newTable.hashPath = hashPath
 
 		curTable.numEnts = 1
@@ -66,6 +79,7 @@ func newFullTable2(depth uint, hashPath uint64, leaf1 leafI, leaf2 flatLeaf) tab
 
 func upgradeToFullTable(hashPath uint64, tabEnts []tableEntry) tableI {
 	var ft = new(fullTable)
+	//var ft = pool.Get().(*fullTable)
 	ft.hashPath = hashPath
 	ft.numEnts = uint(len(tabEnts))
 
@@ -76,6 +90,15 @@ func upgradeToFullTable(hashPath uint64, tabEnts []tableEntry) tableI {
 	return ft
 }
 
+//func (t *fullTable) reset() *fullTable {
+//	t.hashPath = 0
+//	t.numEnts = 0
+//	for i := 0; uint(i) < TABLE_CAPACITY; i++ {
+//		t.nodes[i] = nil
+//	}
+//	return t
+//}
+
 // hashcode() is required for nodeI
 func (t fullTable) hashcode() uint64 {
 	return t.hashPath
@@ -84,6 +107,7 @@ func (t fullTable) hashcode() uint64 {
 // copy() is required for nodeI
 func (t fullTable) copy() *fullTable {
 	var nt = new(fullTable)
+	//var nt = pool.Get().(*fullTable)
 	nt.hashPath = t.hashPath
 	nt.numEnts = t.numEnts
 	for i := 0; i < len(t.nodes); i++ {
@@ -174,10 +198,16 @@ func (t fullTable) set(idx uint, nn nodeI) tableI {
 		}
 
 		if nt.numEnts == 0 {
+			//nt.reset()
+			//pool.Put(nt)
 			return nil
 		}
 
 		if GRADE_TABLES && nt.numEnts < TABLE_CAPACITY/2 {
+			//defer func() {
+			//	nt.reset()
+			//	pool.Put(nt)
+			//}()
 			return downgradeToCompressedTable(nt.hashPath, nt.entries())
 		}
 
