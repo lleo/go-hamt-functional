@@ -46,6 +46,10 @@ const MAXDEPTH uint = 9
 // a HAMT datastructure; its value is 1<<NBITS (ie 2^6 == 64).
 const TABLE_CAPACITY uint = 1 << NBITS
 
+// GRADE_TABLES is a boolean to enable/disable of upgrading & downgrading.
+// true turns upgrading/downgrading ON.
+const GRADE_TABLES = false
+
 const assert_const bool = true
 
 func assert(test bool, msg string) {
@@ -228,7 +232,7 @@ func (h Hamt) Put(k key.Key, v interface{}) (Hamt, bool) {
 	var newLeaf = newFlatLeaf(h60, k, v)
 
 	if h.IsEmpty() {
-		nh.root = newCompressedTable(depth, h60, newLeaf)
+		nh.root = newTable(depth, h60, newLeaf)
 		nh.nentries++
 		return *nh, inserted
 	}
@@ -275,9 +279,9 @@ func (h Hamt) Put(k key.Key, v interface{}) (Hamt, bool) {
 
 			//Can I calculate the hashPath from path? Should I go there? ;}
 
-			collisionTable := newCompressedTable2(depth+1, hashPath, oldLeaf, *newLeaf)
+			tmpTable := newTable2(depth+1, hashPath, oldLeaf, *newLeaf)
 
-			newTable := curTable.set(idx, collisionTable)
+			newTable := curTable.set(idx, tmpTable)
 
 			nh.nentries++
 			nh.copyUp(curTable, newTable, path)

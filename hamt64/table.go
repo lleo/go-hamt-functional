@@ -40,6 +40,20 @@ type tableI interface {
 	set(idx uint, entry nodeI) tableI // set and entry
 }
 
+func newTable(depth uint, hashPath uint64, leaf leafI) tableI {
+	if !GRADE_TABLES {
+		return newFullTable(depth, hashPath, leaf)
+	}
+	return newCompressedTable(depth, hashPath, leaf)
+}
+
+func newTable2(depth uint, hashPath uint64, leaf1 leafI, leaf2 flatLeaf) tableI {
+	if !GRADE_TABLES {
+		return newFullTable2(depth, hashPath, leaf1, leaf2)
+	}
+	return newCompressedTable2(depth, hashPath, leaf1, leaf2)
+}
+
 type tableEntry struct {
 	idx  uint
 	node nodeI
