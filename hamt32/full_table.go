@@ -11,6 +11,62 @@ type fullTable struct {
 	numEnts  uint
 }
 
+func newFullTable(depth uint, hashPath uint32, leaf leafI) tableI {
+	var idx = index(hashPath, depth)
+
+	var ft = new(fullTable)
+	//var ft = pool.Get().(*fullTable)
+	ft.hashPath = hashPath & hashPathMask(depth)
+	ft.numEnts = 1
+	ft.nodes[idx] = leaf
+
+	return ft
+}
+
+func newFullTable2(depth uint, hashPath uint32, leaf1 leafI, leaf2 flatLeaf) tableI {
+	var retTable = new(fullTable)
+	//var retTable = pool.Get().(*fullTable)
+	retTable.hashPath = hashPath & hashPathMask(depth)
+
+	var curTable = retTable
+	var d uint
+	for d = depth; d <= MAXDEPTH; d++ {
+		var idx1 = index(leaf1.hashcode(), d)
+		var idx2 = index(leaf2.hashcode(), d)
+
+		if idx1 != idx2 {
+			curTable.nodes[idx1] = leaf1
+			curTable.nodes[idx2] = leaf2
+
+			curTable.numEnts = 2
+
+			break
+		}
+		// idx1 == idx2 && continue
+
+		hashPath = buildHashPath(hashPath, idx1, d)
+
+		var newTable = new(fullTable)
+		//var newTable = pool.Get().(*fullTable)
+		newTable.hashPath = hashPath
+
+		curTable.numEnts = 1
+		curTable.nodes[idx1] = newTable
+
+		curTable = newTable
+	}
+	// We either BREAK out of the loop,
+	// OR we hit d > MAXDEPTH.
+	if d > MAXDEPTH {
+		// leaf1.hashcode() == leaf2.hashcode()
+		var idx = index(leaf1.hashcode(), MAXDEPTH)
+		leaf, _ := leaf1.put(leaf2.key, leaf2.val)
+		curTable.set(idx, leaf)
+	}
+
+	return retTable
+}
+
 func upgradeToFullTable(hashPath uint32, tabEnts []tableEntry) tableI {
 	var ft = new(fullTable)
 	ft.hashPath = hashPath
