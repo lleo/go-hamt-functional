@@ -47,6 +47,14 @@ const MAXDEPTH uint = 5
 // a HAMT datastructure; its value is 1<<NBITS (ie 2^5 == 32).
 const TABLE_CAPACITY uint = 1 << NBITS
 
+// GRADE_TABLES is a boolean to enable/disable of upgrading & downgrading.
+// true turns upgrading/downgrading ON.
+var GRADE_TABLES = false
+
+// TABLE_TYPE is the type of the initial constructed table. In order for
+// fullTable's to be used up/down-grading tables must be OFF (ie GRADE_TABLES=false).
+var TABLE_TYPE = "full"
+
 const assert_const bool = true
 
 func assert(test bool, msg string) {
@@ -268,7 +276,7 @@ func (h Hamt) Put(k key.Key, v interface{}) (Hamt, bool) {
 	var newLeaf = newFlatLeaf(h30, k, v)
 
 	if h.IsEmpty() {
-		nh.root = newCompressedTable(depth, h30, newLeaf)
+		nh.root = newTable(depth, h30, newLeaf)
 		nh.nentries++
 		return *nh, inserted
 	}
@@ -315,9 +323,9 @@ func (h Hamt) Put(k key.Key, v interface{}) (Hamt, bool) {
 
 			//Can I calculate the hashPath from path? Should I go there? ;}
 
-			collisionTable := newCompressedTable2(depth+1, hashPath, oldLeaf, *newLeaf)
+			tmpTable := newTable2(depth+1, hashPath, oldLeaf, *newLeaf)
 
-			newTable := curTable.set(idx, collisionTable)
+			newTable := curTable.set(idx, tmpTable)
 
 			nh.nentries++
 			nh.copyUp(curTable, newTable, path)

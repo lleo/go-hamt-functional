@@ -48,7 +48,11 @@ const TABLE_CAPACITY uint = 1 << NBITS
 
 // GRADE_TABLES is a boolean to enable/disable of upgrading & downgrading.
 // true turns upgrading/downgrading ON.
-const GRADE_TABLES = false
+var GRADE_TABLES = false
+
+// TABLE_TYPE is the type of the initial constructed table. In order for
+// fullTable's to be used up/down-grading tables must be OFF (ie GRADE_TABLES=false).
+var TABLE_TYPE = "full"
 
 const assert_const bool = true
 
@@ -156,7 +160,7 @@ func (h Hamt) LongString(indent string) string {
 }
 
 func (h Hamt) IsEmpty() bool {
-	return h.root == nil
+	return h.root == nil && h.nentries == 0
 }
 
 func (h Hamt) copy() *Hamt {

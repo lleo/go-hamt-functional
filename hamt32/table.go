@@ -40,28 +40,21 @@ type tableI interface {
 	set(idx uint, entry nodeI) tableI // set and entry
 }
 
+func newTable(depth uint, hashPath uint32, leaf leafI) tableI {
+	if !GRADE_TABLES && TABLE_TYPE == "full" {
+		return newFullTable(depth, hashPath, leaf)
+	}
+	return newCompressedTable(depth, hashPath, leaf)
+}
+
+func newTable2(depth uint, hashPath uint32, leaf1 leafI, leaf2 flatLeaf) tableI {
+	if !GRADE_TABLES && TABLE_TYPE == "full" {
+		return newFullTable2(depth, hashPath, leaf1, leaf2)
+	}
+	return newCompressedTable2(depth, hashPath, leaf1, leaf2)
+}
+
 type tableEntry struct {
 	idx  uint
 	node nodeI
-}
-
-//POPCNT Implementation
-// copied from https://github.com/jddixon/xlUtil_go/blob/master/popCount.go
-//  was MIT License
-
-const (
-	octo_fives  = uint32(0x55555555)
-	octo_threes = uint32(0x33333333)
-	octo_ones   = uint32(0x01010101)
-	octo_fs     = uint32(0x0f0f0f0f)
-)
-
-// The bitCount32() function is a software based implementation of the POPCNT
-// instruction. It returns the number of bits set in a uint32 word.
-//
-// This is copied from https://github.com/jddixon/xlUtil_go/blob/master/popCount.go
-func bitCount32(n uint32) uint {
-	n = n - ((n >> 1) & octo_fives)
-	n = (n & octo_threes) + ((n >> 2) & octo_threes)
-	return uint((((n + (n >> 4)) & octo_fs) * octo_ones) >> 24)
 }
