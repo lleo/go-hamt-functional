@@ -7,8 +7,8 @@ import (
 
 type fullTable struct {
 	hashPath uint32 // depth*NBITS of hash to get to this location in the Trie
-	nodes    [TABLE_CAPACITY]nodeI
 	numEnts  uint
+	nodes    [TABLE_CAPACITY]nodeI
 }
 
 func newFullTable(depth uint, hashPath uint32, leaf leafI) tableI {
@@ -89,9 +89,11 @@ func (t fullTable) copy() *fullTable {
 	var nt = new(fullTable)
 	nt.hashPath = t.hashPath
 	nt.numEnts = t.numEnts
-	for i := 0; i < len(t.nodes); i++ {
-		nt.nodes[i] = t.nodes[i]
-	}
+	//for i := 0; i < len(t.nodes); i++ {
+	//	nt.nodes[i] = t.nodes[i]
+	//}
+	nt.nodes = t.nodes
+
 	return nt
 }
 
@@ -150,9 +152,7 @@ func (t fullTable) entries() []tableEntry {
 
 // get(uint32) is required for tableI
 func (t fullTable) get(idx uint) nodeI {
-	var node = t.nodes[idx]
-
-	return node
+	return t.nodes[idx]
 }
 
 // set(uint32, nodeI) is required for tableI
@@ -180,10 +180,9 @@ func (t fullTable) set(idx uint, nn nodeI) tableI {
 			return nil
 		}
 
-		if nt.numEnts < TABLE_CAPACITY/2 {
+		if GRADE_TABLES && nt.numEnts < TABLE_CAPACITY/2 {
 			return downgradeToCompressedTable(nt.hashPath, nt.entries())
 		}
-
 	}
 
 	return nt
