@@ -1,11 +1,7 @@
 /*
 Package hamt32 implements a functional Hash Array Mapped Trie (HAMT).
-It is called hamt32 because this package is using 32bits of hash for
-the indexes into each level of the Trie. The term functional is used to imply
-immutable and persistent.
-
-All 32bits of the hash is used as we fold the 2 high bits into the lower 30bits
-as described in http://www.isthe.com/chongo/tech/comp/fnv/index.html#xor-fold .
+It is called hamt32 because this package is using 32 nodes for each level of
+the Trie. The term functional is used to imply immutable and persistent.
 
 The 30bits of hash are separated into six 5bit values that constitue the hash
 path of any Key in this Trie. However, not all six levels of the Trie are used.
@@ -21,52 +17,26 @@ package hamt32
 import (
 	"fmt"
 	"log"
-	"os"
-	"strconv"
 	"strings"
 
 	"github.com/lleo/go-hamt/key"
 )
 
-func init() {
-	log.SetOutput(os.Stderr)
-	log.SetPrefix("[hamt] ")
-	log.SetFlags(log.Lshortfile)
-}
-
-// NBITS constant is the number of bits(5) a 30bit hash value is split into,
+// nBits constant is the number of bits(5) a 30bit hash value is split into,
 // to provied the indexes of a HAMT.
-const NBITS uint = 5
+const nBits uint = 5
 
-// MAXDEPTH constant is the maximum depth(5) of NBITS values that constitute
-// the path in a HAMT, from [0..MAXDEPTH]for a total of MAXDEPTH+1(6) levels.
-// NBITS*(MAXDEPTH+1) == HASHBITS (ie 5*(5+1) == 30).
-const MAXDEPTH uint = 5
+// maxDepth constant is the maximum depth(5) of nBits values that constitute
+// the path in a HAMT, from [0..maxDepth]for a total of maxDepth+1(6) levels.
+// nBits*(maxDepth+1) == HASHBITS (ie 5*(5+1) == 30).
+const maxDepth uint = 5
 
-// TABLE_CAPACITY constant is the number of table entries in a each node of
-// a HAMT datastructure; its value is 1<<NBITS (ie 2^5 == 32).
-const TABLE_CAPACITY uint = 1 << NBITS
-
-// GRADE_TABLES is a boolean to enable/disable of upgrading & downgrading.
-// true turns upgrading/downgrading ON.
-var GRADE_TABLES = false
-
-// TABLE_TYPE is the type of the initial constructed table. In order for
-// fullTable's to be used up/down-grading tables must be OFF (ie GRADE_TABLES=false).
-var TABLE_TYPE = "full"
-
-const assert_const bool = true
-
-func assert(test bool, msg string) {
-	if assert_const {
-		if !test {
-			panic(msg)
-		}
-	}
-}
+// tableCapacity constant is the number of table entries in a each node of
+// a HAMT datastructure; its value is 1<<nBits (ie 2^5 == 32).
+const tableCapacity uint = 1 << nBits
 
 func hashPathMask(depth uint) uint32 {
-	return uint32(1<<((depth)*NBITS)) - 1
+	return uint32(1<<((depth)*nBits)) - 1
 }
 
 // Create a string of the form "/%02d/%02d..." to describe a hashPath of
@@ -79,89 +49,35 @@ func hashPathString(hashPath uint32, depth uint) string {
 	if depth == 0 {
 		return "/"
 	}
-	var strs = make([]string, depth+1)
+	var strs = make([]string, depth)
 
-	for d := int(depth); d >= 0; d-- {
-		var idx = index(hashPath, uint(d))
+	for d := uint(0); d < depth; d++ {
+		var idx = index(hashPath, d)
 		strs[d] = fmt.Sprintf("%02d", idx)
 	}
+
 	return "/" + strings.Join(strs, "/")
 }
 
 func hash30String(h30 uint32) string {
-	return hashPathString(h30, MAXDEPTH)
+	return hashPathString(h30, maxDepth)
 }
 
-func nodeMapString(nodeMap uint32) string {
-	var strs = make([]string, 7)
-
-	var top2 = nodeMap >> 30
-	strs[0] = fmt.Sprintf("%02b", top2)
-
-	const tenBitMask uint32 = 1<<10 - 1
-	for i := int(0); i < 5; i++ {
-		var ui = uint(i)
-		tenBitVal := (nodeMap & (tenBitMask << (ui * 10))) >> (ui * 10)
-		strs[5-ui] = fmt.Sprintf("%010b", tenBitVal)
-	}
-
-	return strings.Join(strs, " ")
-}
-
-func hashPathMatches(hashPath uint32, hashPathStr string) bool {
-	//make sure hashPathStr is well formed
-	if !strings.HasPrefix(hashPathStr, "/") {
-		log.Printf("HashPathMatches: hashPathStr,%q does not start with a \"/\"\n", hashPathStr)
-		return false
-	}
-	if strings.HasSuffix(hashPathStr, "/") {
-		log.Printf("HashPathMatches: hashPathStr,%q ends with a \"/\"\n", hashPathStr)
-		return false
-	}
-
-	//convert hashPathStr to a uint32 bit string
-	var strs = strings.Split(hashPathStr, "/")
-	strs = strs[1:] //take the first empty off
-	var bitStr uint32
-	for i, s := range strs {
-		//var nn int64
-		//var err error
-		nn, err := strconv.ParseInt(s, 10, 32)
-		if err != nil {
-			log.Printf("strconv.PareseInt(s=%q, 10, 32) failed", s)
-			return false
-		}
-		n := uint32(nn)
-		if n > 31 {
-			log.Printf("the i,%d entry,%d of hashPathStr,%s is >31", i, n, hashPathStr)
-			return false
-		}
-		bitStr |= n << ((NBITS - uint(i)) * NBITS)
-		//log.Printf("HashPathMatches: bitStr=%032b", bitStr)
-	}
-
-	if (hashPath & bitStr) == bitStr {
-		return true
-	} else {
-		return false
-	}
-}
-
-//indexMask() generates a NBITS(5-bit) mask for a given depth
+//indexMask() generates a nBits(5-bit) mask for a given depth
 func indexMask(depth uint) uint32 {
-	return uint32(uint8(1<<NBITS)-1) << (depth * NBITS)
+	return uint32(uint8(1<<nBits)-1) << (depth * nBits)
 }
 
-//index() calculates a NBITS(5-bit) integer based on the hash and depth
+//index() calculates a nBits(5-bit) integer based on the hash and depth
 func index(h30 uint32, depth uint) uint {
 	var idxMask = indexMask(depth)
-	var idx = uint((h30 & idxMask) >> (depth * NBITS))
+	var idx = uint((h30 & idxMask) >> (depth * nBits))
 	return idx
 }
 
 //buildHashPath(hashPath, idx, depth)
 func buildHashPath(hashPath uint32, idx, depth uint) uint32 {
-	return hashPath | uint32(idx<<(depth*NBITS))
+	return hashPath | uint32(idx<<(depth*nBits))
 }
 
 type keyVal struct {
@@ -169,18 +85,366 @@ type keyVal struct {
 	val interface{}
 }
 
-func (kv keyVal) String() string {
-	return fmt.Sprintf("keyVal{%s, %v}", kv.key, kv.val)
+// Configuration contants to be passed to `hamt32.New(int) *Hamt`.
+const (
+	// HybridTables indicates the structure should use compressedTable
+	// initially, then upgrad to fullTable when appropriate.
+	HybridTables = iota //0
+	// CompTablesOnly indicates the structure should use compressedTables ONLY.
+	// This was intended just save space, but also seems to be faster; CPU cache
+	// locality maybe?
+	CompTablesOnly //1
+	// FullTableOnly indicates the structure should use fullTables ONLY.
+	// This was intended to be for speed, as compressed tables use a software
+	// bitCount function to access individual cells. Turns out, not so much.
+	FullTablesOnly //2
+)
+
+// TableOptionName is a map of the table option value Hybrid, CompTablesOnly,
+// or FullTableOnly to a string representing that option.
+//      var options = hamt32.FullTablesOnly
+//      hamt32.TableOptionName[hamt32.FullTablesOnly] == "FullTablesOnly"
+var TableOptionName = make(map[int]string, 3)
+
+func init() {
+	TableOptionName[HybridTables] = "HybridTables"
+	TableOptionName[CompTablesOnly] = "CompTablesOnly"
+	TableOptionName[FullTablesOnly] = "FullTablesOnly"
 }
 
 type Hamt struct {
-	root     tableI
-	nentries uint
+	root            tableI
+	nentries        uint
+	grade, fullinit bool
 }
 
-// The EMPTY Hamt struct is also the zero value of the Hamt struct and represents
-// an empty Hash Arry Mapped Trie.
-var EMPTY = Hamt{nil, 0}
+// New creates a new hamt32.Hamt data structure with the table option set to
+// either:
+//
+// `hamt32.HybridTables`:
+// Initially start out with compressedTable, but when the table is half full
+// upgrade to fullTable. If a fullTable shrinks to tableCapacity/8(4) entries
+// downgrade to compressedTable.
+//
+// `hamt32.CompTablesOnly`:
+// Use compressedTable ONLY with no up/downgrading to/from fullTable. This
+// uses the least amount of space.
+//
+// `hamt32.FullTablesOnly`:
+// Only use fullTable no up/downgrading from/to compressedTables. This is
+// the fastest performance.
+//
+func New(opt int) *Hamt {
+	var grade, fullinit bool
+	if opt == CompTablesOnly {
+		grade = false
+		fullinit = false
+	} else if opt == FullTablesOnly {
+		grade = false
+		fullinit = true
+	} else /* opt == HybridTables */ {
+		grade = true
+		fullinit = false
+	}
+	return &Hamt{nil, 0, grade, fullinit}
+}
+
+func (h Hamt) IsEmpty() bool {
+	//return h.root == nil
+	//return h.nentries == 0
+	return h.root == nil && h.nentries == 0
+}
+
+func (h Hamt) copy() *Hamt {
+	var nh = new(Hamt)
+
+	//nh.root = h.root //this is ok because all tables are immutable
+	//nh.nentries = h.nentries
+	//nh.grade = h.grade
+	//nh.fullinit = h.fullinit
+	*nh = h
+
+	return nh
+}
+
+func (h Hamt) newRootTable(leaf leafI) tableI {
+	if h.fullinit {
+		return newRootFullTable(h.grade, leaf)
+	}
+	return newRootCompressedTable(h.grade, leaf)
+}
+
+func (h Hamt) newTable(depth uint, hashPath uint32, leaf1 leafI, leaf2 flatLeaf) tableI {
+	if h.fullinit {
+		return newFullTable(h.grade, depth, hashPath, leaf1, leaf2)
+	}
+	return newCompressedTable(h.grade, depth, hashPath, leaf1, leaf2)
+}
+
+// copyUp is ONLY called on a fresh copy of the current Hamt. Hence, modifying
+// it is allowed.
+func (h *Hamt) copyUp(oldTable, newTable tableI, path pathT) {
+	if path.isEmpty() {
+		h.root = newTable
+		return
+	}
+
+	var depth = uint(len(path))
+	var parentDepth = depth - 1
+
+	var oldParent = path.pop()
+
+	var parentIdx = index(oldTable.Hash30(), parentDepth)
+	//var newParent = oldParent.set(parentIdx, newTable)
+	var newParent tableI
+	if newTable == nil {
+		newParent = oldParent.remove(parentIdx)
+	} else {
+		newParent = oldParent.replace(parentIdx, newTable)
+	}
+
+	h.copyUp(oldParent, newParent, path) //recurses at most maxDepth-1 times
+
+	return
+}
+
+// Get(k) retrieves the value for a given key from the Hamt. The bool
+// represents whether the key was found.
+func (h Hamt) Get(k key.Key) (interface{}, bool) {
+	if h.IsEmpty() {
+		return nil, false
+	}
+
+	var h30 = k.Hash30()
+
+	var curTable = h.root
+
+	for depth := uint(0); depth <= maxDepth; depth++ {
+		var idx = index(h30, depth)
+		var curNode = curTable.get(idx)
+
+		if curNode == nil {
+			break
+		}
+
+		if leaf, ok := curNode.(leafI); ok {
+			if leaf.Hash30() == h30 {
+				return leaf.get(k)
+			}
+			return nil, false
+		}
+
+		//else curNode MUST BE A tableI
+		curTable = curNode.(tableI)
+	}
+	// curNode == nil || depth > maxDepth
+
+	return nil, false
+}
+
+//var debugKey = stringkey.New("hbud")
+
+// Put new key/val pair into Hamt, returning a new persistant Hamt and a bool
+// indicating if the key/val pair was added(true) or mearly updated(false).
+func (h Hamt) Put(k key.Key, v interface{}) (Hamt, bool) {
+	//var debug = debugKey.Equals(k)
+
+	var nh = h.copy()
+
+	if h.IsEmpty() {
+		nh.root = h.newRootTable(newFlatLeaf(k, v))
+		nh.nentries++
+		return *nh, true
+	}
+
+	// for-loop state is hashPath, path, curTable and depth.
+	var hashPath uint32
+	var path = newPathT()
+	var curTable = h.root
+
+	for depth := uint(0); depth <= maxDepth; depth++ {
+		var idx = index(k.Hash30(), depth)
+		var curNode = curTable.get(idx)
+
+		if curNode == nil {
+			// INSERT new key/val pair into leaf node in curTable
+			//var newTable = curTable.set(idx, newFlatLeaf(k, v))
+			var newTable = curTable.insert(idx, newFlatLeaf(k, v))
+			nh.nentries++
+			nh.copyUp(curTable, newTable, path)
+			//nh.insertFlatLeaf(curTable, idx, path, newFlatLeaf(k, v))
+			return *nh, true
+		}
+
+		if curLeaf, isLeaf := curNode.(leafI); isLeaf {
+
+			if curLeaf.Hash30() == k.Hash30() {
+				// NOTE to self: I've kept thinging this is a shortcut/optimization.
+				// It is NOT. It is necessary if someone used Hamt.Put(k,v) to
+				// overwrite/update the value for the given key.
+
+				var newLeaf, added = curLeaf.put(k, v)
+				if added {
+					nh.nentries++
+				}
+
+				//var newTable = curTable.set(idx, newLeaf)
+				// newLeaf is NEVER nil and the idx of curTable is not nil
+				var newTable = curTable.replace(idx, newLeaf)
+
+				nh.copyUp(curTable, newTable, path)
+
+				return *nh, added
+			}
+
+			// Ok key/val pair collided with curLeaf are colliding thus we will
+			// create a new table and we are going to insert the new table into
+			// this curTable.
+			//
+			// hashPath is already describes the curent depth; so to add the
+			// idx onto hashPath, you must add +1 to the depth.
+			hashPath = buildHashPath(hashPath, idx, depth)
+
+			var newLeaf = newFlatLeaf(k, v)
+
+			var tmpTable = h.newTable(depth+1, hashPath, curLeaf, *newLeaf)
+
+			//var newTable = curTable.set(idx, tmpTable)
+			// current curTable.get(idx) (aka curNode aka curLeaf) != nil
+			var newTable = curTable.replace(idx, tmpTable)
+
+			nh.nentries++
+			nh.copyUp(curTable, newTable, path) //curTable is not necessary!
+
+			//nh.updateTableTwoLeafCollision(curTable, idx, depth, path, hashPath, curLeaf, newFlatLeaf(k, v))
+
+			return *nh, true
+		} //if curNode ISA leafI
+
+		// curNode is NOT nil & NOT a leafI, so curNode MUST BE a tableI.
+		// We are going to loop, so update loop state like hashPath, path and
+		// curTable.
+		// for-loop will handle updating depth.
+
+		hashPath = buildHashPath(hashPath, idx, depth)
+		path.push(curTable)
+		curTable = curNode.(tableI)
+
+		// PROBLEM: what if depth == maxDepth && curNode ISA tableI ?
+		if depth == maxDepth {
+			panic(fmt.Sprintf("hamt.Put(%s): depth,%d == maxDepth,%d && curNode ISA tableI curTablee=%s", k, depth, maxDepth, curTable.LongString("", maxDepth)))
+		}
+
+	} //end: for
+
+	return *nh, false
+}
+
+func (nh *Hamt) insertFlatLeaf(curTable tableI, idx uint, path pathT, fl *flatLeaf) {
+	var newTable = curTable.insert(idx, fl)
+	nh.nentries++
+	nh.copyUp(curTable, newTable, path)
+	return
+}
+
+func (nh *Hamt) updateTableTwoLeafCollision(curTable tableI, idx uint, depth uint, path pathT, hashPath uint32, curLeaf leafI, newLeaf *flatLeaf) {
+	hashPath = buildHashPath(hashPath, idx, depth)
+
+	var tmpTable = nh.newTable(depth+1, hashPath, curLeaf, *newLeaf)
+
+	//var newTable = curTable.set(idx, tmpTable)
+	// current curTable.get(idx) (aka curNode aka curLeaf) != nil
+	var newTable = curTable.replace(idx, tmpTable)
+
+	nh.nentries++
+	nh.copyUp(curTable, newTable, path) //curTable is not necessary!
+
+	return
+}
+
+// Hamt.Del(k) returns a new Hamt, the value deleted, and a boolean that
+// specifies whether or not the key was deleted (eg it didn't exist to start
+// with). Therefor you must always test deleted before using the new *Hamt
+// value.
+func (h Hamt) Del(k key.Key) (Hamt, interface{}, bool) {
+	var nh = h.copy()
+
+	var h30 = k.Hash30()
+	var depth uint = 0
+
+	// for-loop stat is path, curTable, and depth.
+	var path = newPathT()
+	var curTable = h.root
+
+	for depth = 0; depth <= maxDepth; depth++ {
+		var idx = index(k.Hash30(), depth)
+		var curNode = curTable.get(idx)
+
+		if curNode == nil {
+			return h, nil, false
+		}
+
+		if curLeaf, ok := curNode.(leafI); ok {
+			if curLeaf.Hash30() != k.Hash30() {
+				// Found a leaf, but not the leaf I was looking for.
+				// Therefor, this is an INVALID Hamt !!!
+				log.Printf("h.Del(%q): depth=%d; h30=%s", k, depth, hash30String(h30))
+				log.Printf("h.Del(%q): idx=%d", k, idx)
+				log.Printf("h.Del(%q): curTable=\n%s", k, curTable.LongString("", depth))
+				log.Panicf("h.Del(%q): Found a leaf, but not the leaf I was looking for; depth=%d; idx=%d; curLeaf=%s", k, depth, idx, curLeaf)
+			}
+
+			var newLeaf, v, deleted = curLeaf.del(k)
+			// deleted == true means k was found and deleted
+			// deleted == false means k was NOT found in leaf nor the Hamt generally
+
+			if deleted {
+				// if newLeaf == nil {
+				// 	newTable = curTable.remove(idx)
+				// } else {
+				// 	newTable = curTable.replace(idx, newLeaf)
+				// }
+				//
+				// nh.copyUp(curTable, newTable, path)
+
+				nh.updateTable(curTable, idx, path, newLeaf)
+
+				nh.nentries--
+				return *nh, v, true
+			}
+
+			// *nh == h
+			return h, nil, false
+		}
+
+		// curNode is NOT nil & NOT a leafI, so curNode MUST BE a tableI.
+		// We are going to loop, so update loop state like path and curTable.
+		// for-loop will handle updating depth.
+
+		path.push(curTable)
+		curTable = curNode.(tableI)
+
+		// PROBLEM: what if depth == maxDepth && curNode ISA tableI ?
+		if depth == maxDepth {
+			panic(fmt.Sprintf("hamt.Del(%s): depth,%d == maxDepth,%d && curNode ISA tableI curTablee=%s", k, depth, maxDepth, curTable.LongString("", maxDepth)))
+		}
+	}
+	// depth > maxDepth & no leaf with key was found
+	// So after a thourough search no key/value exists to delete.
+
+	return h, nil, false
+}
+
+func (nh *Hamt) updateTable(curTable tableI, idx uint, path pathT, newLeaf leafI) {
+	var newTable tableI
+	if newLeaf == nil {
+		newTable = curTable.remove(idx)
+	} else {
+		newTable = curTable.replace(idx, newLeaf)
+	}
+
+	nh.copyUp(curTable, newTable, path)
+}
 
 func (h Hamt) String() string {
 	return fmt.Sprintf("Hamt{ nentries: %d, root: %s }", h.nentries, h.root)
@@ -197,210 +461,4 @@ func (h Hamt) LongString(indent string) string {
 		str = indent + fmt.Sprintf("Hamt{ nentries: %d, root: nil }", h.nentries)
 	}
 	return str
-}
-
-func (h Hamt) IsEmpty() bool {
-	//return h.root == nil
-	return h == EMPTY
-}
-
-func (h Hamt) copy() *Hamt {
-	var nh = new(Hamt)
-	nh.root = h.root
-	nh.nentries = h.nentries
-	return nh
-}
-
-func (h *Hamt) copyUp(oldTable, newTable tableI, path pathT) {
-	if path.isEmpty() {
-		h.root = newTable
-		return
-	}
-
-	var depth = uint(len(path))
-	var parentDepth = depth - 1
-
-	oldParent := path.pop()
-
-	var parentIdx = index(oldTable.hashcode(), parentDepth)
-	var newParent = oldParent.set(parentIdx, newTable)
-	h.copyUp(oldParent, newParent, path)
-
-	return
-}
-
-// Get(k) retrieves the value for a given key from the Hamt. The bool
-// represents whether the key was found.
-func (h Hamt) Get(k key.Key) (interface{}, bool) {
-	if h.IsEmpty() {
-		return nil, false
-	}
-
-	var h30 = key.Hash30(k)
-
-	// We know h.root != nil (above IsEmpty test) and h.root is a tableI
-	// intrface compliant struct.
-	var curTable = h.root
-
-	for depth := uint(0); depth <= MAXDEPTH; depth++ {
-		var idx = index(h30, depth)
-		var curNode = curTable.get(idx)
-
-		if curNode == nil {
-			break
-		}
-
-		//if curNode ISA leafI
-		if leaf, ok := curNode.(leafI); ok {
-			//if hashPathEqual(depth, h30, leaf.hashcode()) {
-			if leaf.hashcode() == h30 {
-				return leaf.get(k)
-			}
-			return nil, false
-		}
-
-		//else curNode MUST BE A tableI
-		curTable = curNode.(tableI)
-	}
-	// curNode == nil || depth > MAXDEPTH
-
-	return nil, false
-}
-
-func (h Hamt) Put(k key.Key, v interface{}) (Hamt, bool) {
-	var nh = h.copy()
-	var inserted = true //true == inserted key/val pair; false == replaced val
-
-	var h30 = key.Hash30(k)
-	var depth uint = 0
-	var newLeaf = newFlatLeaf(h30, k, v)
-
-	if h.IsEmpty() {
-		nh.root = newTable(depth, h30, newLeaf)
-		nh.nentries++
-		return *nh, inserted
-	}
-
-	var path = newPathT()
-	var hashPath uint32 = 0
-	var curTable = h.root
-
-	for depth = 0; depth <= MAXDEPTH; depth++ {
-		var idx = index(h30, depth)
-		var curNode = curTable.get(idx)
-
-		if curNode == nil {
-			var newTable = curTable.set(idx, newLeaf)
-			nh.nentries++
-			nh.copyUp(curTable, newTable, path)
-			return *nh, inserted
-		}
-
-		if oldLeaf, ok := curNode.(leafI); ok {
-
-			if oldLeaf.hashcode() == h30 {
-				log.Printf("HOLY SHIT!!! Two keys collided with this same hash30 orig key=\"%s\" new key=\"%s\" h30=0x%016x", oldLeaf.(flatLeaf).key, k, h30)
-
-				var newLeaf leafI
-				newLeaf, inserted = oldLeaf.put(k, v)
-				if inserted {
-					nh.nentries++
-				}
-				var newTable = curTable.set(idx, newLeaf)
-				nh.copyUp(curTable, newTable, path)
-
-				return *nh, inserted
-			}
-
-			// Ok newLeaf & oldLeaf are colliding thus we create a new table and
-			// we are going to insert it into this curTable.
-			//
-			// hashPath is already describes the curent depth; so to add the
-			// idx onto hashPath, you must add +1 to the depth.
-			hashPath = buildHashPath(hashPath, idx, depth)
-
-			var newLeaf = newFlatLeaf(h30, k, v)
-
-			//Can I calculate the hashPath from path? Should I go there? ;}
-
-			tmpTable := newTable2(depth+1, hashPath, oldLeaf, *newLeaf)
-
-			newTable := curTable.set(idx, tmpTable)
-
-			nh.nentries++
-			nh.copyUp(curTable, newTable, path)
-			return *nh, inserted
-		} //if curNode ISA leafI
-
-		hashPath = buildHashPath(hashPath, idx, depth)
-
-		path.push(curTable)
-
-		// The table entry is NOT NIL & NOT LeafI THEREFOR MUST BE a tableI
-		curTable = curNode.(tableI)
-
-	} //end: for
-
-	inserted = false
-	return *nh, inserted
-}
-
-// Hamt.Del(k) returns a new Hamt, the value deleted, and a boolean that
-// specifies whether or not the key was deleted (eg it didn't exist to start
-// with). Therefor you must always test deleted before using the new *Hamt
-// value.
-func (h Hamt) Del(k key.Key) (Hamt, interface{}, bool) {
-	var nh = h.copy()
-	var v interface{}
-	var deleted bool
-
-	var h30 = key.Hash30(k)
-	var depth uint = 0
-
-	var path = newPathT()
-	var curTable = h.root
-
-	for depth = 0; depth <= MAXDEPTH; depth++ {
-		var idx = index(h30, depth)
-		var curNode = curTable.get(idx)
-
-		if curNode == nil {
-			return h, nil, false
-		}
-
-		if oldLeaf, ok := curNode.(leafI); ok {
-			if oldLeaf.hashcode() != h30 {
-				// Found a leaf, but not the leaf I was looking for.
-				log.Printf("h.Del(%q): depth=%d; h30=%s", k, depth, hash30String(h30))
-				log.Printf("h.Del(%q): idx=%d", k, idx)
-				log.Printf("h.Del(%q): curTable=\n%s", k, curTable.LongString("", depth))
-				log.Printf("h.Del(%q): Found a leaf, but not the leaf I was looking for; depth=%d; idx=%d; oldLeaf=%s", k, depth, idx, oldLeaf)
-				return h, nil, false
-			}
-
-			var newLeaf leafI
-			newLeaf, v, deleted = oldLeaf.del(k)
-
-			//var idx = index(oldLeaf.hashcode(), depth)
-			var newTable = curTable.set(idx, newLeaf)
-
-			nh.copyUp(curTable, newTable, path)
-
-			if deleted {
-				nh.nentries--
-			}
-
-			return *nh, v, deleted
-		}
-
-		// curTable now becomes the parentTable and we push it on to the path
-		path.push(curTable)
-
-		// the curNode MUST BE a tableI so we coerce and set it to curTable
-		curTable = curNode.(tableI)
-	}
-	// depth > MAXDEPTH & no leaf with key was found
-	// So after a thourough search no key/value exists to delete.
-
-	return h, nil, false
 }

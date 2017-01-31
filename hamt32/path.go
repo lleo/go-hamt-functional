@@ -6,7 +6,7 @@ type pathT []tableI
 
 // Constructs an empty pathT object.
 func newPathT() pathT {
-	return pathT(make([]tableI, 0, MAXDEPTH))
+	return pathT(make([]tableI, 0, maxDepth))
 }
 
 // path.peek() returns the last entry without inserted with path.push(...)
@@ -46,14 +46,12 @@ func (path *pathT) isEmpty() bool {
 // Convert path to a string representation. This is only good for debug messages.
 // It is not a string format to convert back from.
 func (path *pathT) String() string {
-	s := "["
 	pvs := []tableI(*path)
-	strs := make([]string, 0, 2)
-	for _, pv := range pvs {
-		strs = append(strs, pv.String())
+	strs := make([]string, len(*path))
+	var indent = ""
+	for i, pv := range pvs {
+		strs[i] = indent + pv.String() + "\n"
+		indent += "  "
 	}
-	s += strings.Join(strs, " ")
-	s += "]"
-
-	return s
+	return strings.Join(strs, "")
 }

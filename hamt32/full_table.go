@@ -2,37 +2,39 @@ package hamt32
 
 import (
 	"fmt"
+	"log"
 	"strings"
 )
 
 type fullTable struct {
-	hashPath uint32 // depth*NBITS of hash to get to this location in the Trie
+	hashPath uint32 // depth*nBits of hash to get to this location in the Trie
 	numEnts  uint
-	nodes    [TABLE_CAPACITY]nodeI
+	nodes    [tableCapacity]nodeI
+	grade    bool
 }
 
-func newFullTable(depth uint, hashPath uint32, leaf leafI) tableI {
-	var idx = index(hashPath, depth)
+func newRootFullTable(grade bool, leaf leafI) tableI {
+	var idx = index(leaf.Hash30(), 0)
 
 	var ft = new(fullTable)
-	//var ft = pool.Get().(*fullTable)
-	ft.hashPath = hashPath & hashPathMask(depth)
+	ft.grade = grade
+	//ft.hashPath = 0
 	ft.numEnts = 1
 	ft.nodes[idx] = leaf
 
 	return ft
 }
 
-func newFullTable2(depth uint, hashPath uint32, leaf1 leafI, leaf2 flatLeaf) tableI {
+func newFullTable(grade bool, depth uint, hashPath uint32, leaf1 leafI, leaf2 flatLeaf) tableI {
 	var retTable = new(fullTable)
-	//var retTable = pool.Get().(*fullTable)
+	retTable.grade = grade
 	retTable.hashPath = hashPath & hashPathMask(depth)
 
 	var curTable = retTable
 	var d uint
-	for d = depth; d <= MAXDEPTH; d++ {
-		var idx1 = index(leaf1.hashcode(), d)
-		var idx2 = index(leaf2.hashcode(), d)
+	for d = depth; d < maxDepth; d++ {
+		var idx1 = index(leaf1.Hash30(), d)
+		var idx2 = index(leaf2.Hash30(), d)
 
 		if idx1 != idx2 {
 			curTable.nodes[idx1] = leaf1
@@ -47,7 +49,7 @@ func newFullTable2(depth uint, hashPath uint32, leaf1 leafI, leaf2 flatLeaf) tab
 		hashPath = buildHashPath(hashPath, idx1, d)
 
 		var newTable = new(fullTable)
-		//var newTable = pool.Get().(*fullTable)
+		newTable.grade = grade
 		newTable.hashPath = hashPath
 
 		curTable.numEnts = 1
@@ -56,12 +58,32 @@ func newFullTable2(depth uint, hashPath uint32, leaf1 leafI, leaf2 flatLeaf) tab
 		curTable = newTable
 	}
 	// We either BREAK out of the loop,
-	// OR we hit d > MAXDEPTH.
-	if d > MAXDEPTH {
-		// leaf1.hashcode() == leaf2.hashcode()
-		var idx = index(leaf1.hashcode(), MAXDEPTH)
-		leaf, _ := leaf1.put(leaf2.key, leaf2.val)
-		curTable.set(idx, leaf)
+	// OR we hit d == maxDepth.
+	if d == maxDepth {
+		var idx1 = index(leaf1.Hash30(), d)
+		var idx2 = index(leaf2.Hash30(), d)
+
+		if idx1 != idx2 {
+			curTable.nodes[idx1] = leaf1
+			curTable.nodes[idx2] = leaf2
+
+			curTable.numEnts = 2
+
+			return retTable
+		}
+		// idx1 == idx2
+
+		// NOTE: This condition should never result. The condition is
+		// leaf1.Hash30() == leaf2.Hash30() all the way to maxDepth;
+		// because Hamt.newTable() is called only once, and after a
+		// leaf1.Hash30() == leaf2.Hash30() check. It is here for completeness.
+		log.Printf("full_table.go:newFullTable: SHOULD NOT BE CALLED")
+		if leaf1.Hash30() != leaf2.Hash30() {
+			log.Printf("madDepth=%d; d=%d; idx1=%d; idx2=%d", maxDepth, d, idx1, idx2)
+			log.Panicf("newFullTable: %s != %s", hash30String(leaf1.Hash30()), hash30String(leaf2.Hash30()))
+		}
+		var newLeaf, _ = leaf1.put(leaf2.key, leaf2.val)
+		curTable.insert(idx1, newLeaf)
 	}
 
 	return retTable
@@ -69,6 +91,7 @@ func newFullTable2(depth uint, hashPath uint32, leaf1 leafI, leaf2 flatLeaf) tab
 
 func upgradeToFullTable(hashPath uint32, tabEnts []tableEntry) tableI {
 	var ft = new(fullTable)
+	ft.grade = true
 	ft.hashPath = hashPath
 	ft.numEnts = uint(len(tabEnts))
 
@@ -79,14 +102,15 @@ func upgradeToFullTable(hashPath uint32, tabEnts []tableEntry) tableI {
 	return ft
 }
 
-// hashcode() is required for nodeI
-func (t fullTable) hashcode() uint32 {
+// Hash30() is required for nodeI
+func (t fullTable) Hash30() uint32 {
 	return t.hashPath
 }
 
 // copy() is required for nodeI
 func (t fullTable) copy() *fullTable {
 	var nt = new(fullTable)
+	nt.grade = t.grade
 	nt.hashPath = t.hashPath
 	nt.numEnts = t.numEnts
 	//for i := 0; i < len(t.nodes); i++ {
@@ -103,24 +127,20 @@ func (t fullTable) String() string {
 	return fmt.Sprintf("fullTable{hashPath:%s, nentries()=%d}", hash30String(t.hashPath), t.nentries())
 }
 
-func (t fullTable) toString(depth uint) string {
-	return fmt.Sprintf("fullTable{hashPath:%s, nentries()=%d}", hashPathString(t.hashPath, depth), t.nentries())
-}
-
 // LongString() is required for tableI
 func (t fullTable) LongString(indent string, depth uint) string {
 	var strs = make([]string, 2+len(t.nodes))
 
-	strs[0] = indent + fmt.Sprintf("fullTable{hashPath:%s, nentries()=%d", hashPathString(t.hashPath, depth), t.nentries())
+	strs[0] = indent + fmt.Sprintf("fullTable{hashPath:%s, nentries()=%d,", hashPathString(t.hashPath, depth), t.nentries())
 
 	for i, n := range t.nodes {
 		if t.nodes[i] == nil {
-			strs[2+i] = indent + fmt.Sprintf("\tt.nodes[%d]: nil", i)
+			strs[1+i] = indent + fmt.Sprintf("\tt.nodes[%d]: nil", i)
 		} else {
 			if t, ok := t.nodes[i].(tableI); ok {
-				strs[2+i] = indent + fmt.Sprintf("\tt.nodes[%d]:\n%s", i, t.LongString(indent+"\t", depth+1))
+				strs[1+i] = indent + fmt.Sprintf("\tt.nodes[%d]:\n%s", i, t.LongString(indent+"\t", depth+1))
 			} else {
-				strs[2+i] = indent + fmt.Sprintf("\tt.nodes[%d]: %s", i, n)
+				strs[1+i] = indent + fmt.Sprintf("\tt.nodes[%d]: %s", i, n)
 			}
 		}
 	}
@@ -140,7 +160,7 @@ func (t fullTable) nentries() uint {
 func (t fullTable) entries() []tableEntry {
 	var n = t.nentries()
 	var ents = make([]tableEntry, n)
-	for i, j := uint(0), 0; i < TABLE_CAPACITY; i++ {
+	for i, j := uint(0), 0; i < tableCapacity; i++ {
 		if t.nodes[i] != nil {
 			//The difference with compressedTable is t.nodes[i] vs. t.nodes[j]
 			ents[j] = tableEntry{i, t.nodes[i]}
@@ -159,30 +179,62 @@ func (t fullTable) get(idx uint) nodeI {
 func (t fullTable) set(idx uint, nn nodeI) tableI {
 	var nt = t.copy()
 
-	var occupied = false
-	if nt.nodes[idx] != nil {
-		occupied = true
-	}
+	//var occupied = false
+	//if nt.nodes[idx] != nil {
+	//	occupied = true
+	//}
+	var occupied = t.nodes[idx] != nil
 
 	if nn != nil {
 		nt.nodes[idx] = nn
 		if !occupied {
-			nt.numEnts += 1
+			nt.numEnts++
 		}
 	} else /* if nn == nil */ {
 		nt.nodes[idx] = nn
-
 		if occupied {
-			nt.numEnts -= 1
+			nt.numEnts--
 		}
 
 		if nt.numEnts == 0 {
 			return nil
 		}
 
-		if GRADE_TABLES && nt.numEnts < TABLE_CAPACITY/2 {
+		if t.grade && nt.numEnts < tableCapacity/2 {
 			return downgradeToCompressedTable(nt.hashPath, nt.entries())
 		}
+	}
+
+	return nt
+}
+
+func (t fullTable) insert(idx uint, entry nodeI) tableI {
+	// t.nodes[idx] == nil
+	var nt = t.copy()
+	nt.nodes[idx] = entry
+	nt.numEnts++
+	return nt
+}
+
+func (t fullTable) replace(idx uint, entry nodeI) tableI {
+	// t.nodes[idx] != nil
+	var nt = t.copy()
+	nt.nodes[idx] = entry
+	return nt
+}
+
+func (t fullTable) remove(idx uint) tableI {
+	// t.nodes[idx] != nil
+	var nt = t.copy()
+	nt.nodes[idx] = nil
+	nt.numEnts--
+
+	if t.grade && nt.numEnts < tableCapacity/2 {
+		return downgradeToCompressedTable(nt.hashPath, nt.entries())
+	}
+
+	if nt.numEnts == 0 {
+		return nil
 	}
 
 	return nt
