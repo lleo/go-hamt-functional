@@ -268,16 +268,13 @@ func (h Hamt) Put(k key.Key, v interface{}) (Hamt, bool) {
 
 		if curNode == nil {
 			// INSERT new key/val pair into leaf node in curTable
-			//var newTable = curTable.set(idx, newFlatLeaf(k, v))
 			var newTable = curTable.insert(idx, newFlatLeaf(k, v))
 			nh.nentries++
 			nh.copyUp(curTable, newTable, path)
-			//nh.insertFlatLeaf(curTable, idx, path, newFlatLeaf(k, v))
 			return *nh, true
 		}
 
 		if curLeaf, isLeaf := curNode.(leafI); isLeaf {
-
 			if curLeaf.Hash30() == k.Hash30() {
 				// NOTE to self: I've kept thinging this is a shortcut/optimization.
 				// It is NOT. It is necessary if someone used Hamt.Put(k,v) to
@@ -288,7 +285,6 @@ func (h Hamt) Put(k key.Key, v interface{}) (Hamt, bool) {
 					nh.nentries++
 				}
 
-				//var newTable = curTable.set(idx, newLeaf)
 				// newLeaf is NEVER nil and the idx of curTable is not nil
 				var newTable = curTable.replace(idx, newLeaf)
 
@@ -309,14 +305,10 @@ func (h Hamt) Put(k key.Key, v interface{}) (Hamt, bool) {
 
 			var tmpTable = h.newTable(depth+1, hashPath, curLeaf, *newLeaf)
 
-			//var newTable = curTable.set(idx, tmpTable)
-			// current curTable.get(idx) (aka curNode aka curLeaf) != nil
 			var newTable = curTable.replace(idx, tmpTable)
 
 			nh.nentries++
 			nh.copyUp(curTable, newTable, path) //curTable is not necessary!
-
-			//nh.updateTableTwoLeafCollision(curTable, idx, depth, path, hashPath, curLeaf, newFlatLeaf(k, v))
 
 			return *nh, true
 		} //if curNode ISA leafI
@@ -340,28 +332,6 @@ func (h Hamt) Put(k key.Key, v interface{}) (Hamt, bool) {
 	return *nh, false
 }
 
-func (nh *Hamt) insertFlatLeaf(curTable tableI, idx uint, path pathT, fl *flatLeaf) {
-	var newTable = curTable.insert(idx, fl)
-	nh.nentries++
-	nh.copyUp(curTable, newTable, path)
-	return
-}
-
-func (nh *Hamt) updateTableTwoLeafCollision(curTable tableI, idx uint, depth uint, path pathT, hashPath uint32, curLeaf leafI, newLeaf *flatLeaf) {
-	hashPath = buildHashPath(hashPath, idx, depth)
-
-	var tmpTable = nh.newTable(depth+1, hashPath, curLeaf, *newLeaf)
-
-	//var newTable = curTable.set(idx, tmpTable)
-	// current curTable.get(idx) (aka curNode aka curLeaf) != nil
-	var newTable = curTable.replace(idx, tmpTable)
-
-	nh.nentries++
-	nh.copyUp(curTable, newTable, path) //curTable is not necessary!
-
-	return
-}
-
 // Hamt.Del(k) returns a new Hamt, the value deleted, and a boolean that
 // specifies whether or not the key was deleted (eg it didn't exist to start
 // with). Therefor you must always test deleted before using the new *Hamt
@@ -369,13 +339,10 @@ func (nh *Hamt) updateTableTwoLeafCollision(curTable tableI, idx uint, depth uin
 func (h Hamt) Del(k key.Key) (Hamt, interface{}, bool) {
 	var nh = h.copy()
 
-	var h30 = k.Hash30()
-	var depth uint = 0
-
-	// for-loop stat is path, curTable, and depth.
+	// for-loop state is path, curTable, and depth.
 	var path = newPathT()
 	var curTable = h.root
-
+	var depth uint
 	for depth = 0; depth <= maxDepth; depth++ {
 		var idx = index(k.Hash30(), depth)
 		var curNode = curTable.get(idx)
@@ -385,38 +352,31 @@ func (h Hamt) Del(k key.Key) (Hamt, interface{}, bool) {
 		}
 
 		if curLeaf, ok := curNode.(leafI); ok {
-			if curLeaf.Hash30() != k.Hash30() {
-				// Found a leaf, but not the leaf I was looking for.
-				// Therefor, this is an INVALID Hamt !!!
-				log.Printf("h.Del(%q): depth=%d; h30=%s", k, depth, hash30String(h30))
-				log.Printf("h.Del(%q): idx=%d", k, idx)
-				log.Printf("h.Del(%q): curTable=\n%s", k, curTable.LongString("", depth))
-				log.Panicf("h.Del(%q): Found a leaf, but not the leaf I was looking for; depth=%d; idx=%d; curLeaf=%s", k, depth, idx, curLeaf)
-			}
-
 			var newLeaf, v, deleted = curLeaf.del(k)
-			// deleted == true means k was found and deleted
-			// deleted == false means k was NOT found in leaf nor the Hamt generally
 
-			if deleted {
-				// if newLeaf == nil {
-				// 	newTable = curTable.remove(idx)
-				// } else {
-				// 	newTable = curTable.replace(idx, newLeaf)
-				// }
-				//
-				// nh.copyUp(curTable, newTable, path)
-
-				nh.updateTable(curTable, idx, path, newLeaf)
-
-				nh.nentries--
-				return *nh, v, true
+			if !deleted {
+				return h, nil, false
 			}
 
-			// *nh == h
-			return h, nil, false
+			var newTable tableI
+			if newLeaf == nil {
+				newTable = curTable.remove(idx)
+			} else {
+				newTable = curTable.replace(idx, newLeaf)
+			}
+
+			nh.nentries--
+			nh.copyUp(curTable, newTable, path)
+
+			return *nh, v, true
 		}
 
+		if depth == maxDepth {
+			if _, isTable := curNode.(tableI); isTable {
+				log.Panic("depth == maxDepth && curNode.(tableI)")
+			}
+			break
+		}
 		// curNode is NOT nil & NOT a leafI, so curNode MUST BE a tableI.
 		// We are going to loop, so update loop state like path and curTable.
 		// for-loop will handle updating depth.
@@ -433,17 +393,6 @@ func (h Hamt) Del(k key.Key) (Hamt, interface{}, bool) {
 	// So after a thourough search no key/value exists to delete.
 
 	return h, nil, false
-}
-
-func (nh *Hamt) updateTable(curTable tableI, idx uint, path pathT, newLeaf leafI) {
-	var newTable tableI
-	if newLeaf == nil {
-		newTable = curTable.remove(idx)
-	} else {
-		newTable = curTable.replace(idx, newLeaf)
-	}
-
-	nh.copyUp(curTable, newTable, path)
 }
 
 func (h Hamt) String() string {
