@@ -175,39 +175,6 @@ func (t fullTable) get(idx uint) nodeI {
 	return t.nodes[idx]
 }
 
-// set(uint32, nodeI) is required for tableI
-func (t fullTable) set(idx uint, nn nodeI) tableI {
-	var nt = t.copy()
-
-	//var occupied = false
-	//if nt.nodes[idx] != nil {
-	//	occupied = true
-	//}
-	var occupied = t.nodes[idx] != nil
-
-	if nn != nil {
-		nt.nodes[idx] = nn
-		if !occupied {
-			nt.numEnts++
-		}
-	} else /* if nn == nil */ {
-		nt.nodes[idx] = nn
-		if occupied {
-			nt.numEnts--
-		}
-
-		if nt.numEnts == 0 {
-			return nil
-		}
-
-		if t.grade && nt.numEnts < tableCapacity/2 {
-			return downgradeToCompressedTable(nt.hashPath, nt.entries())
-		}
-	}
-
-	return nt
-}
-
 func (t fullTable) insert(idx uint, entry nodeI) tableI {
 	// t.nodes[idx] == nil
 	var nt = t.copy()

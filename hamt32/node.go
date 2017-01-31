@@ -54,16 +54,14 @@ type tableI interface {
 
 	LongString(indent string, depth uint) string
 
-	nentries() uint // get the number of node entries
+	nentries() uint // get the number of nodeI entries
 
 	// Get an Ordered list of index and node pairs. This slice MUST BE Ordered
 	// from lowest index to highest.
 	entries() []tableEntry
 
-	get(idx uint) nodeI               // get an entry
-	set(idx uint, entry nodeI) tableI // set an entry, return new table
+	get(idx uint) nodeI
 
-	// IDEA: replace set() with more exact methods
 	insert(idx uint, entry nodeI) tableI
 	replace(idx uint, entry nodeI) tableI
 	remove(idx uint) tableI

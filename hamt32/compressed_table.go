@@ -251,50 +251,6 @@ func (t compressedTable) get(idx uint) nodeI {
 	return node
 }
 
-// set(uint32, nodeI) is required for tableI
-func (t compressedTable) set(idx uint, nn nodeI) tableI {
-	var nt = t.copy()
-
-	var nodeBit = uint32(1 << idx) // idx is the slot
-	var bitMask = nodeBit - 1      // mask all bits below the idx'th bit
-
-	// Calculate the index into compressedTable.nodes[] for this entry
-	var i = bitCount32(t.nodeMap & bitMask)
-
-	if nn != nil {
-		if (t.nodeMap & nodeBit) == 0 {
-			nt.nodeMap |= nodeBit
-
-			// insert newnode into the i'th spot of nt.nodes[]
-			nt.nodes = append(nt.nodes[:i], append([]nodeI{nn}, nt.nodes[i:]...)...)
-
-			if t.grade && uint(len(nt.nodes)) >= tableCapacity/2 {
-				// promote compressedTable to fullTable
-				return upgradeToFullTable(nt.hashPath, nt.entries())
-			}
-		} else /* if (t.nodeMap & nodeBit) > 0 */ {
-			// don't need to touch nt.nodeMap
-			nt.nodes[i] = nn //overwrite i'th slice entry
-		}
-	} else /* if nn == nil */ {
-		if (t.nodeMap & nodeBit) > 0 {
-
-			nt.nodeMap &^= nodeBit //unset nodeBit via bitClear &^ op
-			nt.nodes = append(nt.nodes[:i], nt.nodes[i+1:]...)
-
-			if nt.nodeMap == 0 {
-				// FIXME: Is len(nt.nodes) == 0 ?
-				return nil
-			}
-		} else if (t.nodeMap & nodeBit) == 0 {
-			// do nothing
-			return t
-		}
-	}
-
-	return nt
-}
-
 func (t compressedTable) insert(idx uint, entry nodeI) tableI {
 	// t.nodeMap & 1<<idx == 0
 	var nodeBit = uint32(1 << idx)
