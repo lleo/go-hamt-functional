@@ -21,7 +21,7 @@ index. For example a Trie with a string key would be split into chanracters and
 each node from root would be indexed by the next character in the string key.
 
 In the case of a this HAMT implementation the key is hashed into a 30 or 60 bit
-number. In the case of the string_key we take the []byte slice of the string
+number. In the case of the stringkey we take the []byte slice of the string
 and feed it to hash.fnv.New32() or New64() hash generator. Since these
 generate 32 and 64 bit hash values respectively and we need 30 and 60 bit
 values, we use the [xor-fold technique](http://www.isthe.com/chongo/tech/comp/fnv/index.html#xor-fold)
@@ -52,39 +52,45 @@ is to update the `nentries` entry.
 package hamt
 
 import (
-	"fmt"
-
 	"github.com/lleo/go-hamt-functional/hamt32"
 	"github.com/lleo/go-hamt-functional/hamt64"
-	"github.com/lleo/go-hamt/key"
 )
 
-//type HamtFunctional interface {
-//	Get(key.Key) (interface{}, bool)
-//	Put(key.Key, interface{}) (HamtFunctional, bool)
-//	Del(key.Key) (HamtFunctional, interface{}, bool)
-//	IsEmpty() bool
-//	String() string
-//	LongString(indent string) string
-//}
+// Configuration contants to be passed to `hamt64.New(int) *Hamt`.
+// WARNING!!! Duplicated code with both hamt32 and hamt64. Must have
+// test to guarantee they stay in lock step.
+const (
+	// HybridTables indicates the structure should use compressedTable
+	// initially, then upgrad to fullTable when appropriate.
+	HybridTables = iota
+	// CompTablesOnly indicates the structure should use compressedTables ONLY.
+	// This was intended just save space, but also seems to be faster; CPU cache
+	// locality maybe?
+	CompTablesOnly
+	// FullTableOnly indicates the structure should use fullTables ONLY.
+	// This was intended to be for speed, as compressed tables use a software
+	// bitCount function to access individual cells. Turns out, not so much.
+	FullTablesOnly
+)
 
-type keyVal struct {
-	key key.Key
-	val interface{}
-}
+// TableOptionName is a pedantic lookup table; given the configuration option
+// it maps to the configuration option's name.
+var TableOptionName = make(map[int]string, 3)
 
-func (kv keyVal) String() string {
-	return fmt.Sprintf("keyVal{%s, %v}", kv.key, kv.val)
+func init() {
+	TableOptionName[0] = "HybridTables"
+	TableOptionName[1] = "CompTablesOnly"
+	TableOptionName[2] = "FullTablesOnly"
 }
 
 // NewHamt32 returns the hamt32.EMPTY value. Given that Hamt
 // structs are immutable a single hamt32.EMPTY value can be used.
 func NewHamt32() hamt32.Hamt {
-	return hamt32.EMPTY
+	return hamt32.New(HybridTables)
 }
 
 // NewHamt64 returns the hamt64.EMPTY value. Given that Hamt
 // structs are immutable a single hamt64.EMPTY value can be uses.
 func NewHamt64() hamt64.Hamt {
-	return hamt64.EMPTY
+	return hamt64.New(HybridTables)
 }

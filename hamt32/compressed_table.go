@@ -2,11 +2,12 @@ package hamt32
 
 import (
 	"fmt"
+	"log"
 	"strings"
 )
 
 // The compressedTable is a low memory usage version of a fullTable. It applies
-// to tables with less than TABLE_CAPACITY/2 number of entries in the table.
+// to tables with less than tableCapacity/2 number of entries in the table.
 //
 // It records which table entries are populated using a bit map called nodeMap.
 //
@@ -31,16 +32,18 @@ import (
 // there is a function to calculate the index called index(hash, depth);
 //
 type compressedTable struct {
-	hashPath uint32 // depth*NBITS of hash to get to this location in the Trie
+	hashPath uint32 // depth*nBits of hash to get to this location in the Trie
 	nodeMap  uint32
 	nodes    []nodeI
+	grade    bool
 }
 
-func newCompressedTable(depth uint, hashPath uint32, lf leafI) tableI {
-	var idx = index(hashPath, depth)
+func newRootCompressedTable(grade bool, lf leafI) tableI {
+	var idx = index(lf.Hash30(), 0)
 
 	var ct = new(compressedTable)
-	ct.hashPath = hashPath & hashPathMask(depth)
+	ct.grade = grade
+	//ct.hashPath = 0
 	ct.nodeMap = 1 << idx
 	ct.nodes = make([]nodeI, 1)
 	ct.nodes[0] = lf
@@ -48,15 +51,16 @@ func newCompressedTable(depth uint, hashPath uint32, lf leafI) tableI {
 	return ct
 }
 
-func newCompressedTable2(depth uint, hashPath uint32, leaf1 leafI, leaf2 flatLeaf) tableI {
+func newCompressedTable(grade bool, depth uint, hashPath uint32, leaf1 leafI, leaf2 flatLeaf) tableI {
 	var retTable = new(compressedTable)
+	retTable.grade = grade
 	retTable.hashPath = hashPath & hashPathMask(depth)
 
 	var curTable = retTable
 	var d uint
-	for d = depth; d <= MAXDEPTH; d++ {
-		var idx1 = index(leaf1.hashcode(), d)
-		var idx2 = index(leaf2.hashcode(), d)
+	for d = depth; d < maxDepth; d++ {
+		var idx1 = index(leaf1.Hash30(), d)
+		var idx2 = index(leaf2.Hash30(), d)
 
 		if idx1 != idx2 {
 			curTable.nodes = make([]nodeI, 2)
@@ -73,13 +77,14 @@ func newCompressedTable2(depth uint, hashPath uint32, leaf1 leafI, leaf2 flatLea
 
 			break
 		}
-		// idx1 == idx2 && continue
+		// idx1 == idx2 && loop
 
 		curTable.nodes = make([]nodeI, 1)
 
 		hashPath = buildHashPath(hashPath, idx1, d)
 
 		var newTable = new(compressedTable)
+		newTable.grade = grade
 		newTable.hashPath = hashPath
 
 		curTable.nodeMap = 1 << idx1 //Set the idx1'th bit
@@ -88,25 +93,55 @@ func newCompressedTable2(depth uint, hashPath uint32, leaf1 leafI, leaf2 flatLea
 		curTable = newTable
 	}
 	// We either BREAK out of the loop,
-	// OR we hit d > MAXDEPTH.
-	if d > MAXDEPTH {
-		// leaf1.hashcode() == leaf2.hashcode()
-		var idx = index(leaf1.hashcode(), MAXDEPTH)
-		leaf, _ := leaf1.put(leaf2.key, leaf2.val)
-		curTable.set(idx, leaf)
+	// OR we hit d == maxDepth.
+	if d == maxDepth {
+		var idx1 = index(leaf1.Hash30(), d)
+		var idx2 = index(leaf2.Hash30(), d)
+
+		if idx1 != idx2 {
+			curTable.nodes = make([]nodeI, 2)
+
+			curTable.nodeMap |= 1 << idx1
+			curTable.nodeMap |= 1 << idx2
+			if idx1 < idx2 {
+				curTable.nodes[0] = leaf1
+				curTable.nodes[1] = leaf2
+			} else {
+				curTable.nodes[0] = leaf2
+				curTable.nodes[1] = leaf1
+			}
+
+			return retTable
+		}
+		// idx1 == idx2
+
+		// NOTE: This condition should never result. The condition is
+		// leaf1.Hash30() == leaf2.Hash30() all the way to maxDepth;
+		// because Hamt.newTable() is called only once, and after a
+		// leaf1.Hash30() == leaf2.Hash30() check. It is here for completeness.
+		log.Printf("compressed_table.go:newCompressedTable: SHOULD NOT BE CALLED")
+		if leaf1.Hash30() != leaf2.Hash30() {
+			log.Printf("madDepth=%d; d=%d; idx1=%d; idx2=%d", maxDepth, d, idx1, idx2)
+			log.Panicf("newCompressedTable: %s != %s", hash30String(leaf1.Hash30()), hash30String(leaf2.Hash30()))
+		}
+		var newLeaf, _ = leaf1.put(leaf2.key, leaf2.val)
+		curTable.nodes = make([]nodeI, 1)
+		curTable.nodeMap |= 1 << idx1
+		curTable.nodes[0] = newLeaf
 	}
 
 	return retTable
 }
 
 // downgradeToCompressedTable() converts fullTable structs that have less than
-// TABLE_CAPACITY/2 tableEntry's. One important thing we know is that none of
+// tableCapacity/2 tableEntry's. One important thing we know is that none of
 // the entries will collide with another.
 //
 // The ents []tableEntry slice is guaranteed to be in order from lowest idx to
 // highest. tableI.entries() also adhears to this contract.
 func downgradeToCompressedTable(hashPath uint32, ents []tableEntry) *compressedTable {
 	var nt = new(compressedTable)
+	nt.grade = true
 	nt.hashPath = hashPath
 	//nt.nodeMap = 0
 	nt.nodes = make([]nodeI, len(ents))
@@ -121,16 +156,32 @@ func downgradeToCompressedTable(hashPath uint32, ents []tableEntry) *compressedT
 	return nt
 }
 
-func (t compressedTable) hashcode() uint32 {
+func (t compressedTable) Hash30() uint32 {
 	return t.hashPath
 }
 
 func (t compressedTable) copy() *compressedTable {
 	var nt = new(compressedTable)
+	nt.grade = t.grade
 	nt.hashPath = t.hashPath
 	nt.nodeMap = t.nodeMap
 	nt.nodes = append(nt.nodes, t.nodes...)
 	return nt
+}
+
+func nodeMapString(nodeMap uint32) string {
+	var strs = make([]string, 4)
+
+	var top2 = nodeMap >> 30
+	strs[0] = fmt.Sprintf("%02b", top2)
+
+	const tenBitMask uint32 = 1<<10 - 1
+	for i := uint(0); i < 3; i++ {
+		tenBitVal := (nodeMap & (tenBitMask << (i * 10))) >> (i * 10)
+		strs[3-i] = fmt.Sprintf("%010b", tenBitVal)
+	}
+
+	return strings.Join(strs, " ")
 }
 
 //String() is required for nodeI depth
@@ -140,24 +191,17 @@ func (t compressedTable) String() string {
 		hash30String(t.hashPath), t.nentries())
 }
 
-func (t compressedTable) toString(depth uint) string {
-	return fmt.Sprintf("compressedTable{hashPath:%s, nentries()=%d}",
-		hashPathString(t.hashPath, depth), t.nentries())
-}
-
 // LongString() is required for tableI
 func (t compressedTable) LongString(indent string, depth uint) string {
-	var strs = make([]string, 3+len(t.nodes))
+	var strs = make([]string, 2+len(t.nodes))
 
-	strs[0] = indent + fmt.Sprintf("compressedTable{hashPath=%s, nentries()=%d", hashPathString(t.hashPath, depth), t.nentries())
-
-	strs[1] = indent + "\tnodeMap=" + nodeMapString(t.nodeMap) + ","
+	strs[0] = indent + fmt.Sprintf("compressedTable{hashPath=%s, nentries()=%d, nodeMap=%s,", hashPathString(t.hashPath, depth), t.nentries(), nodeMapString(t.nodeMap))
 
 	for i, n := range t.nodes {
 		if t, ok := n.(tableI); ok {
-			strs[2+i] = indent + fmt.Sprintf("\tt.nodes[%d]:\n%s", i, t.LongString(indent+"\t", depth+1))
+			strs[1+i] = indent + fmt.Sprintf("\tt.nodes[%d]:\n%s", i, t.LongString(indent+"\t", depth+1))
 		} else {
-			strs[2+i] = indent + fmt.Sprintf("\tt.nodes[%d]: %s", i, n.String())
+			strs[1+i] = indent + fmt.Sprintf("\tt.nodes[%d]: %s", i, n.String())
 		}
 	}
 
@@ -167,7 +211,8 @@ func (t compressedTable) LongString(indent string, depth uint) string {
 }
 
 func (t compressedTable) nentries() uint {
-	return bitCount32(t.nodeMap)
+	//return bitCount32(t.nodeMap)
+	return uint(len(t.nodes))
 }
 
 // This function MUST return the slice of tableEntry structs from lowest
@@ -176,7 +221,7 @@ func (t compressedTable) entries() []tableEntry {
 	var n = t.nentries()
 	var ents = make([]tableEntry, n)
 
-	for i, j := uint(0), uint(0); i < TABLE_CAPACITY; i++ {
+	for i, j := uint(0), uint(0); i < tableCapacity; i++ {
 		var nodeBit = uint32(1 << i)
 
 		if (t.nodeMap & nodeBit) > 0 {
@@ -223,7 +268,7 @@ func (t compressedTable) set(idx uint, nn nodeI) tableI {
 			// insert newnode into the i'th spot of nt.nodes[]
 			nt.nodes = append(nt.nodes[:i], append([]nodeI{nn}, nt.nodes[i:]...)...)
 
-			if GRADE_TABLES && uint(len(nt.nodes)) >= TABLE_CAPACITY/2 {
+			if t.grade && uint(len(nt.nodes)) >= tableCapacity/2 {
 				// promote compressedTable to fullTable
 				return upgradeToFullTable(nt.hashPath, nt.entries())
 			}
@@ -245,6 +290,57 @@ func (t compressedTable) set(idx uint, nn nodeI) tableI {
 			// do nothing
 			return t
 		}
+	}
+
+	return nt
+}
+
+func (t compressedTable) insert(idx uint, entry nodeI) tableI {
+	// t.nodeMap & 1<<idx == 0
+	var nodeBit = uint32(1 << idx)
+	var bitMask = nodeBit - 1
+	var i = bitCount32(t.nodeMap & bitMask)
+
+	var nt = t.copy()
+	nt.nodeMap |= nodeBit
+
+	// insert newnode into the i'th spot of nt.nodes[]
+	nt.nodes = append(nt.nodes[:i], append([]nodeI{entry}, nt.nodes[i:]...)...)
+
+	if t.grade && uint(len(nt.nodes)) >= tableCapacity/2 {
+		// promote compressedTable to fullTable
+		return upgradeToFullTable(nt.hashPath, nt.entries())
+	}
+
+	return nt
+}
+
+func (t compressedTable) replace(idx uint, entry nodeI) tableI {
+	// t.nodeMap & 1<<idx > 0
+	var nodeBit = uint32(1 << idx)
+	var bitMask = nodeBit - 1
+	var i = bitCount32(t.nodeMap & bitMask)
+
+	var nt = t.copy()
+
+	nt.nodes[i] = entry
+
+	return nt
+}
+
+func (t compressedTable) remove(idx uint) tableI {
+	// t.nodeMap & 1<<idx > 0
+	var nodeBit = uint32(1 << idx)
+	var bitMask = nodeBit - 1
+	var i = bitCount32(t.nodeMap & bitMask)
+
+	var nt = t.copy()
+
+	nt.nodeMap &^= nodeBit
+	nt.nodes = append(nt.nodes[:i], nt.nodes[i+1:]...)
+
+	if nt.nodeMap == 0 {
+		return nil
 	}
 
 	return nt
