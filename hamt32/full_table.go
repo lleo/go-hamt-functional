@@ -25,12 +25,13 @@ func newRootFullTable(grade bool, leaf leafI) tableI {
 	return ft
 }
 
-func newFullTable(grade bool, depth uint, hashPath uint32, leaf1 leafI, leaf2 flatLeaf) tableI {
+func newFullTable(grade bool, depth uint, leaf1 leafI, leaf2 flatLeaf) tableI {
 	var retTable = new(fullTable)
 	retTable.grade = grade
-	retTable.hashPath = hashPath & hashPathMask(depth)
+	retTable.hashPath = leaf1.Hash30() & hashPathMask(depth)
 
 	var curTable = retTable
+	var hashPath = retTable.hashPath
 	var d uint
 	for d = depth; d < maxDepth; d++ {
 		var idx1 = index(leaf1.Hash30(), d)
