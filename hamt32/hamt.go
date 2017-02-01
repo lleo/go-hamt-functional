@@ -16,7 +16,6 @@ package hamt32
 
 import (
 	"fmt"
-	"log"
 	"strings"
 
 	"github.com/lleo/go-hamt/key"
@@ -174,11 +173,14 @@ func (h Hamt) newRootTable(leaf leafI) tableI {
 	return newRootCompressedTable(h.grade, leaf)
 }
 
-func (h Hamt) newTable(depth uint, hashPath uint32, leaf1 leafI, leaf2 flatLeaf) tableI {
+func (h Hamt) newTable(depth uint, leaf1 leafI, k key.Key, v interface{}) tableI {
+	//var hashPath = k.Hash30() & hashPathMask(depth)
+	var leaf2 = *newFlatLeaf(k, v)
+
 	if h.fullinit {
-		return newFullTable(h.grade, depth, hashPath, leaf1, leaf2)
+		return newFullTable(h.grade, depth, leaf1, leaf2)
 	}
-	return newCompressedTable(h.grade, depth, hashPath, leaf1, leaf2)
+	return newCompressedTable(h.grade, depth, leaf1, leaf2)
 }
 
 // copyUp is ONLY called on a fresh copy of the current Hamt. Hence, modifying
@@ -195,7 +197,6 @@ func (h *Hamt) copyUp(oldTable, newTable tableI, path pathT) {
 	var oldParent = path.pop()
 
 	var parentIdx = index(oldTable.Hash30(), parentDepth)
-	//var newParent = oldParent.set(parentIdx, newTable)
 	var newParent tableI
 	if newTable == nil {
 		newParent = oldParent.remove(parentIdx)
@@ -257,79 +258,62 @@ func (h Hamt) Put(k key.Key, v interface{}) (Hamt, bool) {
 		return *nh, true
 	}
 
-	// for-loop state is hashPath, path, curTable and depth.
-	var hashPath uint32
+	var newTable tableI
+	var added bool
+
+	// for-loop state is path, curTable and depth.
 	var path = newPathT()
 	var curTable = h.root
+	var depth uint
 
-	for depth := uint(0); depth <= maxDepth; depth++ {
+	for depth = 0; depth < maxDepth; depth++ {
 		var idx = index(k.Hash30(), depth)
 		var curNode = curTable.get(idx)
 
 		if curNode == nil {
-			// INSERT new key/val pair into leaf node in curTable
-			var newTable = curTable.insert(idx, newFlatLeaf(k, v))
-			nh.nentries++
-			nh.copyUp(curTable, newTable, path)
-			return *nh, true
+			newTable = curTable.insert(idx, newFlatLeaf(k, v))
+			added = true
+			break
 		}
 
 		if curLeaf, isLeaf := curNode.(leafI); isLeaf {
 			if curLeaf.Hash30() == k.Hash30() {
-				// NOTE to self: I've kept thinging this is a shortcut/optimization.
-				// It is NOT. It is necessary if someone used Hamt.Put(k,v) to
-				// overwrite/update the value for the given key.
-
-				var newLeaf, added = curLeaf.put(k, v)
-				if added {
-					nh.nentries++
-				}
-
-				// newLeaf is NEVER nil and the idx of curTable is not nil
-				var newTable = curTable.replace(idx, newLeaf)
-
-				nh.copyUp(curTable, newTable, path)
-
-				return *nh, added
+				var newLeaf leafI
+				newLeaf, added = curLeaf.put(k, v)
+				newTable = curTable.replace(idx, newLeaf)
+				break
 			}
 
-			// Ok key/val pair collided with curLeaf are colliding thus we will
-			// create a new table and we are going to insert the new table into
-			// this curTable.
-			//
-			// hashPath is already describes the curent depth; so to add the
-			// idx onto hashPath, you must add +1 to the depth.
-			hashPath = buildHashPath(hashPath, idx, depth)
-
-			var newLeaf = newFlatLeaf(k, v)
-
-			var tmpTable = h.newTable(depth+1, hashPath, curLeaf, *newLeaf)
-
-			var newTable = curTable.replace(idx, tmpTable)
-
-			nh.nentries++
-			nh.copyUp(curTable, newTable, path) //curTable is not necessary!
-
-			return *nh, true
-		} //if curNode ISA leafI
-
-		// curNode is NOT nil & NOT a leafI, so curNode MUST BE a tableI.
-		// We are going to loop, so update loop state like hashPath, path and
-		// curTable.
-		// for-loop will handle updating depth.
-
-		hashPath = buildHashPath(hashPath, idx, depth)
-		path.push(curTable)
-		curTable = curNode.(tableI)
-
-		// PROBLEM: what if depth == maxDepth && curNode ISA tableI ?
-		if depth == maxDepth {
-			panic(fmt.Sprintf("hamt.Put(%s): depth,%d == maxDepth,%d && curNode ISA tableI curTablee=%s", k, depth, maxDepth, curTable.LongString("", maxDepth)))
+			var tmpTable = h.newTable(depth+1, curLeaf, k, v)
+			newTable = curTable.replace(idx, tmpTable)
+			added = true
+			break
 		}
 
-	} //end: for
+		path.push(curTable)
+		curTable = curNode.(tableI)
+	}
+	if depth == maxDepth {
+		var idx = index(k.Hash30(), depth)
+		var curNode = curTable.get(idx)
 
-	return *nh, false
+		if curNode == nil {
+			newTable = curTable.insert(idx, newFlatLeaf(k, v))
+			added = true
+		} else {
+			var curLeaf = curNode.(leafI)
+			var newLeaf leafI
+			newLeaf, added = curLeaf.put(k, v)
+			newTable = curTable.replace(idx, newLeaf)
+		}
+	}
+
+	if added {
+		nh.nentries++
+	}
+	nh.copyUp(curTable, newTable, path)
+
+	return *nh, added
 }
 
 // Hamt.Del(k) returns a new Hamt, the value deleted, and a boolean that
@@ -339,60 +323,77 @@ func (h Hamt) Put(k key.Key, v interface{}) (Hamt, bool) {
 func (h Hamt) Del(k key.Key) (Hamt, interface{}, bool) {
 	var nh = h.copy()
 
+	var val interface{}
+	var deleted bool
+	var newTable tableI
+
 	// for-loop state is path, curTable, and depth.
 	var path = newPathT()
 	var curTable = h.root
 	var depth uint
-	for depth = 0; depth <= maxDepth; depth++ {
+	for depth = 0; depth < maxDepth; depth++ {
 		var idx = index(k.Hash30(), depth)
 		var curNode = curTable.get(idx)
 
 		if curNode == nil {
-			return h, nil, false
+			//return h, nil, false
+			return *nh, val, deleted
 		}
 
 		if curLeaf, ok := curNode.(leafI); ok {
-			var newLeaf, v, deleted = curLeaf.del(k)
+			var newLeaf leafI
+			newLeaf, val, deleted = curLeaf.del(k)
 
 			if !deleted {
-				return h, nil, false
+				//return h, nil, false
+				return *nh, val, deleted
 			}
 
-			var newTable tableI
 			if newLeaf == nil {
 				newTable = curTable.remove(idx)
 			} else {
 				newTable = curTable.replace(idx, newLeaf)
 			}
 
-			nh.nentries--
-			nh.copyUp(curTable, newTable, path)
-
-			return *nh, v, true
-		}
-
-		if depth == maxDepth {
-			if _, isTable := curNode.(tableI); isTable {
-				log.Panic("depth == maxDepth && curNode.(tableI)")
-			}
 			break
 		}
+
 		// curNode is NOT nil & NOT a leafI, so curNode MUST BE a tableI.
 		// We are going to loop, so update loop state like path and curTable.
 		// for-loop will handle updating depth.
 
 		path.push(curTable)
 		curTable = curNode.(tableI)
+	}
+	if depth == maxDepth {
+		var idx = index(k.Hash30(), depth)
+		var curNode = curTable.get(idx)
 
-		// PROBLEM: what if depth == maxDepth && curNode ISA tableI ?
-		if depth == maxDepth {
-			panic(fmt.Sprintf("hamt.Del(%s): depth,%d == maxDepth,%d && curNode ISA tableI curTablee=%s", k, depth, maxDepth, curTable.LongString("", maxDepth)))
+		if curNode == nil {
+			return *nh, val, deleted
+		}
+
+		var curLeaf = curNode.(leafI)
+
+		var newLeaf leafI
+		newLeaf, val, deleted = curLeaf.del(k)
+
+		if !deleted {
+			//return h, nil, false
+			return *nh, val, deleted
+		}
+
+		if newLeaf == nil {
+			newTable = curTable.remove(idx)
+		} else {
+			newTable = curTable.replace(idx, newLeaf)
 		}
 	}
-	// depth > maxDepth & no leaf with key was found
-	// So after a thourough search no key/value exists to delete.
 
-	return h, nil, false
+	nh.nentries--
+	nh.copyUp(curTable, newTable, path)
+
+	return *nh, val, deleted
 }
 
 func (h Hamt) String() string {
