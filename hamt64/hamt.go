@@ -84,32 +84,16 @@ type keyVal struct {
 	val interface{}
 }
 
-// Configuration contants to be passed to `hamt64.New(int) *Hamt`.
-const (
-	// HybridTables indicates the structure should use compressedTable
-	// initially, then upgrade to fullTable when appropriate.
-	HybridTables = iota //0
-	// CompTablesOnly indicates the structure should use compressedTables ONLY.
-	// This was intended just save space, but also seems to be faster; CPU cache
-	// locality maybe?
-	CompTablesOnly //1
-	// FullTableOnly indicates the structure should use fullTables ONLY.
-	// This was intended to be for speed, as compressed tables use a software
-	// bitCount function to access individual cells. Turns out, not so much.
-	FullTablesOnly //2
-)
+// GradeTables variable controls whether Hamt structures will upgrade/
+// downgrade compressed/full tables. This variable and FullTableInit
+// should not be changed during the lifetime of any Hamt structure.
+// Default: true
+var GradeTables = true
 
-// TableOptionName is a map of the table option value Hybrid, CompTablesOnly,
-// or FullTableOnly to a string representing that option.
-//      var options = hamt64.FullTablesOnly
-//      hamt64.TableOptionName[hamt64.FullTablesOnly] == "FullTablesOnly"
-var TableOptionName = make(map[int]string, 3)
-
-func init() {
-	TableOptionName[HybridTables] = "HybridTables"
-	TableOptionName[CompTablesOnly] = "CompTablesOnly"
-	TableOptionName[FullTablesOnly] = "FullTablesOnly"
-}
+// FullTableInit variable controls whether the initial new table type is
+// fullTable, else the initial new table type is compressedTable.
+// Default: false
+var FullTableInit = false
 
 // UpgradeThreshold is a variable that defines when a compressedTable meats
 // or exceeds that number of entries, then that table will be upgraded to
@@ -124,82 +108,39 @@ var UpgradeThreshold = TableCapacity / 2
 var DowngradeThreshold = TableCapacity / 4
 
 type Hamt struct {
-	root            tableI
-	nentries        uint
-	grade, fullinit bool
-}
-
-// New creates a new hamt64.Hamt data structure with the table option set to
-// either:
-//
-// `hamt64.HybridTables`:
-// Initially start out with compressedTable, but when the table is half full
-// upgrade to fullTable. If a fullTable shrinks to TableCapacity/8(4) entries
-// downgrade to compressedTable.
-//
-// `hamt64.CompTablesOnly`:
-// Use compressedTable ONLY with no up/downgrading to/from fullTable. This
-// uses the least amount of space.
-//
-// `hamt64.FullTablesOnly`:
-// Only use fullTable no up/downgrading from/to compressedTables. This is
-// the fastest performance.
-//
-func New(opt int) *Hamt {
-	var grade, fullinit bool
-	if opt == CompTablesOnly {
-		grade = false
-		fullinit = false
-	} else if opt == FullTablesOnly {
-		grade = false
-		fullinit = true
-	} else /* opt == HybridTables */ {
-		grade = true
-		fullinit = false
-	}
-	return &Hamt{nil, 0, grade, fullinit}
+	root     tableI
+	nentries uint
 }
 
 func (h Hamt) IsEmpty() bool {
 	//return h.root == nil
 	//return h.nentries == 0
-	return h.root == nil && h.nentries == 0
+	//return h.root == nil && h.nentries == 0
+	return h == Hamt{}
 }
 
-func (h Hamt) copy() *Hamt {
-	var nh = new(Hamt)
-
-	//nh.root = h.root //this is ok because all tables are immutable
-	//nh.nentries = h.nentries
-	//nh.grade = h.grade
-	//nh.fullinit = h.fullinit
-	*nh = h
-
-	return nh
-}
-
-func (h Hamt) newRootTable(leaf leafI) tableI {
-	if h.fullinit {
-		return newRootFullTable(h.grade, leaf)
+func createRootTable(leaf leafI) tableI {
+	if FullTableInit {
+		return createRootFullTable(leaf)
 	}
-	return newRootCompressedTable(h.grade, leaf)
+	return createRootCompressedTable(leaf)
 }
 
-func (h Hamt) newTable(depth uint, leaf1 leafI, k key.Key, v interface{}) tableI {
+func createTable(depth uint, leaf1 leafI, k key.Key, v interface{}) tableI {
 	//var hashPath = k.Hash60() & hashPathMask(depth)
 	var leaf2 = *newFlatLeaf(k, v)
 
-	if h.fullinit {
-		return newFullTable(h.grade, depth, leaf1, leaf2)
+	if FullTableInit {
+		return createFullTable(depth, leaf1, leaf2)
 	}
-	return newCompressedTable(h.grade, depth, leaf1, leaf2)
+	return createCompressedTable(depth, leaf1, leaf2)
 }
 
 // copyUp is ONLY called on a fresh copy of the current Hamt. Hence, modifying
 // it is allowed.
-func (h *Hamt) copyUp(oldTable, newTable tableI, path pathT) {
+func (nh *Hamt) copyUp(oldTable, newTable tableI, path pathT) {
 	if path.isEmpty() {
-		h.root = newTable
+		nh.root = newTable
 		return
 	}
 
@@ -216,7 +157,7 @@ func (h *Hamt) copyUp(oldTable, newTable tableI, path pathT) {
 		newParent = oldParent.replace(parentIdx, newTable)
 	}
 
-	h.copyUp(oldParent, newParent, path) //recurses at most MaxDepth-1 times
+	nh.copyUp(oldParent, newParent, path) //recurses at most MaxDepth-1 times
 
 	return
 }
@@ -255,19 +196,15 @@ func (h Hamt) Get(k key.Key) (interface{}, bool) {
 	return nil, false
 }
 
-//var debugKey = stringkey.New("hbud")
-
 // Put new key/val pair into Hamt, returning a new persistant Hamt and a bool
 // indicating if the key/val pair was added(true) or mearly updated(false).
 func (h Hamt) Put(k key.Key, v interface{}) (Hamt, bool) {
-	//var debug = debugKey.Equals(k)
-
-	var nh = h.copy()
+	var nh = h
 
 	if h.IsEmpty() {
-		nh.root = h.newRootTable(newFlatLeaf(k, v))
+		nh.root = createRootTable(newFlatLeaf(k, v))
 		nh.nentries++
-		return *nh, true
+		return nh, true
 	}
 
 	var newTable tableI
@@ -296,7 +233,7 @@ func (h Hamt) Put(k key.Key, v interface{}) (Hamt, bool) {
 				break
 			}
 
-			var tmpTable = h.newTable(depth+1, curLeaf, k, v)
+			var tmpTable = createTable(depth+1, curLeaf, k, v)
 			newTable = curTable.replace(idx, tmpTable)
 			added = true
 			break
@@ -325,7 +262,7 @@ func (h Hamt) Put(k key.Key, v interface{}) (Hamt, bool) {
 	}
 	nh.copyUp(curTable, newTable, path)
 
-	return *nh, added
+	return nh, added
 }
 
 // Hamt.Del(k) returns a new Hamt, the value deleted, and a boolean that
@@ -333,7 +270,7 @@ func (h Hamt) Put(k key.Key, v interface{}) (Hamt, bool) {
 // with). Therefor you must always test deleted before using the new *Hamt
 // value.
 func (h Hamt) Del(k key.Key) (Hamt, interface{}, bool) {
-	var nh = h.copy()
+	var nh = h
 
 	var val interface{}
 	var deleted bool
@@ -349,7 +286,7 @@ func (h Hamt) Del(k key.Key) (Hamt, interface{}, bool) {
 
 		if curNode == nil {
 			//return h, nil, false
-			return *nh, val, deleted
+			return nh, val, deleted
 		}
 
 		if curLeaf, ok := curNode.(leafI); ok {
@@ -358,7 +295,7 @@ func (h Hamt) Del(k key.Key) (Hamt, interface{}, bool) {
 
 			if !deleted {
 				//return h, nil, false
-				return *nh, val, deleted
+				return nh, val, deleted
 			}
 
 			if newLeaf == nil {
@@ -382,7 +319,7 @@ func (h Hamt) Del(k key.Key) (Hamt, interface{}, bool) {
 		var curNode = curTable.get(idx)
 
 		if curNode == nil {
-			return *nh, val, deleted
+			return nh, val, deleted
 		}
 
 		var curLeaf = curNode.(leafI)
@@ -392,7 +329,7 @@ func (h Hamt) Del(k key.Key) (Hamt, interface{}, bool) {
 
 		if !deleted {
 			//return h, nil, false
-			return *nh, val, deleted
+			return nh, val, deleted
 		}
 
 		if newLeaf == nil {
@@ -405,7 +342,7 @@ func (h Hamt) Del(k key.Key) (Hamt, interface{}, bool) {
 	nh.nentries--
 	nh.copyUp(curTable, newTable, path)
 
-	return *nh, val, deleted
+	return nh, val, deleted
 }
 
 func (h Hamt) String() string {

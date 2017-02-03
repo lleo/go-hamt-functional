@@ -10,14 +10,12 @@ type fullTable struct {
 	hashPath uint64 // depth*Nbits of hash to get to this location in the Trie
 	numEnts  uint
 	nodes    [TableCapacity]nodeI
-	grade    bool
 }
 
-func newRootFullTable(grade bool, leaf leafI) tableI {
+func createRootFullTable(leaf leafI) tableI {
 	var idx = index(leaf.Hash60(), 0)
 
 	var ft = new(fullTable)
-	ft.grade = grade
 	//ft.hashPath = 0
 	ft.numEnts = 1
 	ft.nodes[idx] = leaf
@@ -25,9 +23,8 @@ func newRootFullTable(grade bool, leaf leafI) tableI {
 	return ft
 }
 
-func newFullTable(grade bool, depth uint, leaf1 leafI, leaf2 flatLeaf) tableI {
+func createFullTable(depth uint, leaf1 leafI, leaf2 flatLeaf) tableI {
 	var retTable = new(fullTable)
-	retTable.grade = grade
 	retTable.hashPath = leaf1.Hash60() & hashPathMask(depth)
 
 	var curTable = retTable
@@ -50,7 +47,6 @@ func newFullTable(grade bool, depth uint, leaf1 leafI, leaf2 flatLeaf) tableI {
 		hashPath = buildHashPath(hashPath, idx1, d)
 
 		var newTable = new(fullTable)
-		newTable.grade = grade
 		newTable.hashPath = hashPath
 
 		curTable.numEnts = 1
@@ -92,7 +88,6 @@ func newFullTable(grade bool, depth uint, leaf1 leafI, leaf2 flatLeaf) tableI {
 
 func upgradeToFullTable(hashPath uint64, tabEnts []tableEntry) tableI {
 	var ft = new(fullTable)
-	ft.grade = true
 	ft.hashPath = hashPath
 	ft.numEnts = uint(len(tabEnts))
 
@@ -111,7 +106,6 @@ func (t fullTable) Hash60() uint64 {
 // copy() is required for nodeI
 func (t fullTable) copy() *fullTable {
 	var nt = new(fullTable)
-	nt.grade = t.grade
 	nt.hashPath = t.hashPath
 	nt.numEnts = t.numEnts
 	//for i := 0; i < len(t.nodes); i++ {
@@ -197,7 +191,7 @@ func (t fullTable) remove(idx uint) tableI {
 	nt.nodes[idx] = nil
 	nt.numEnts--
 
-	if t.grade && nt.numEnts < DowngradeThreshold {
+	if GradeTables && nt.numEnts < DowngradeThreshold {
 		return downgradeToCompressedTable(nt.hashPath, nt.entries())
 	}
 

@@ -35,14 +35,12 @@ type compressedTable struct {
 	hashPath uint64 // depth*Nbits of hash to get to this location in the Trie
 	nodeMap  uint64
 	nodes    []nodeI
-	grade    bool
 }
 
-func newRootCompressedTable(grade bool, lf leafI) tableI {
+func createRootCompressedTable(lf leafI) tableI {
 	var idx = index(lf.Hash60(), 0)
 
 	var ct = new(compressedTable)
-	ct.grade = grade
 	//ct.hashPath = 0
 	ct.nodeMap = 1 << idx
 	ct.nodes = make([]nodeI, 1)
@@ -51,9 +49,8 @@ func newRootCompressedTable(grade bool, lf leafI) tableI {
 	return ct
 }
 
-func newCompressedTable(grade bool, depth uint, leaf1 leafI, leaf2 flatLeaf) tableI {
+func createCompressedTable(depth uint, leaf1 leafI, leaf2 flatLeaf) tableI {
 	var retTable = new(compressedTable)
-	retTable.grade = grade
 	retTable.hashPath = leaf1.Hash60() & hashPathMask(depth)
 
 	var curTable = retTable
@@ -85,7 +82,6 @@ func newCompressedTable(grade bool, depth uint, leaf1 leafI, leaf2 flatLeaf) tab
 		hashPath = buildHashPath(hashPath, idx1, d)
 
 		var newTable = new(compressedTable)
-		newTable.grade = grade
 		newTable.hashPath = hashPath
 
 		curTable.nodeMap = 1 << idx1 //Set the idx1'th bit
@@ -120,10 +116,10 @@ func newCompressedTable(grade bool, depth uint, leaf1 leafI, leaf2 flatLeaf) tab
 		// leaf1.Hash60() == leaf2.Hash60() all the way to MaxDepth;
 		// because Hamt.newTable() is called only once, and after a
 		// leaf1.Hash60() == leaf2.Hash60() check. It is here for completeness.
-		log.Printf("compressed_table.go:newCompressedTable: SHOULD NOT BE CALLED")
+		log.Printf("compressed_table.go:createCompressedTable: SHOULD NOT BE CALLED")
 		if leaf1.Hash60() != leaf2.Hash60() {
 			log.Printf("madDepth=%d; d=%d; idx1=%d; idx2=%d", MaxDepth, d, idx1, idx2)
-			log.Panicf("newCompressedTable: %s != %s", hash60String(leaf1.Hash60()), hash60String(leaf2.Hash60()))
+			log.Panicf("createCompressedTable: %s != %s", hash60String(leaf1.Hash60()), hash60String(leaf2.Hash60()))
 		}
 		var newLeaf, _ = leaf1.put(leaf2.key, leaf2.val)
 		curTable.nodes = make([]nodeI, 1)
@@ -142,7 +138,6 @@ func newCompressedTable(grade bool, depth uint, leaf1 leafI, leaf2 flatLeaf) tab
 // highest. tableI.entries() also adhears to this contract.
 func downgradeToCompressedTable(hashPath uint64, ents []tableEntry) *compressedTable {
 	var nt = new(compressedTable)
-	nt.grade = true
 	nt.hashPath = hashPath
 	//nt.nodeMap = 0
 	nt.nodes = make([]nodeI, len(ents))
@@ -163,7 +158,6 @@ func (t compressedTable) Hash60() uint64 {
 
 func (t compressedTable) copy() *compressedTable {
 	var nt = new(compressedTable)
-	nt.grade = t.grade
 	nt.hashPath = t.hashPath
 	nt.nodeMap = t.nodeMap
 	nt.nodes = append(nt.nodes, t.nodes...)
@@ -264,7 +258,7 @@ func (t compressedTable) insert(idx uint, entry nodeI) tableI {
 	// insert newnode into the i'th spot of nt.nodes[]
 	nt.nodes = append(nt.nodes[:i], append([]nodeI{entry}, nt.nodes[i:]...)...)
 
-	if t.grade && uint(len(nt.nodes)) >= UpgradeThreshold {
+	if GradeTables && uint(len(nt.nodes)) >= UpgradeThreshold {
 		// promote compressedTable to fullTable
 		return upgradeToFullTable(nt.hashPath, nt.entries())
 	}
