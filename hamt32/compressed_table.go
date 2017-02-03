@@ -7,7 +7,7 @@ import (
 )
 
 // The compressedTable is a low memory usage version of a fullTable. It applies
-// to tables with less than tableCapacity/2 number of entries in the table.
+// to tables with less than TableCapacity/2 number of entries in the table.
 //
 // It records which table entries are populated using a bit map called nodeMap.
 //
@@ -32,7 +32,7 @@ import (
 // there is a function to calculate the index called index(hash, depth);
 //
 type compressedTable struct {
-	hashPath uint32 // depth*nBits of hash to get to this location in the Trie
+	hashPath uint32 // depth*Nbits of hash to get to this location in the Trie
 	nodeMap  uint32
 	nodes    []nodeI
 	grade    bool
@@ -59,7 +59,7 @@ func newCompressedTable(grade bool, depth uint, leaf1 leafI, leaf2 flatLeaf) tab
 	var curTable = retTable
 	var hashPath = retTable.hashPath
 	var d uint
-	for d = depth; d < maxDepth; d++ {
+	for d = depth; d < MaxDepth; d++ {
 		var idx1 = index(leaf1.Hash30(), d)
 		var idx2 = index(leaf2.Hash30(), d)
 
@@ -94,8 +94,8 @@ func newCompressedTable(grade bool, depth uint, leaf1 leafI, leaf2 flatLeaf) tab
 		curTable = newTable
 	}
 	// We either BREAK out of the loop,
-	// OR we hit d == maxDepth.
-	if d == maxDepth {
+	// OR we hit d == MaxDepth.
+	if d == MaxDepth {
 		var idx1 = index(leaf1.Hash30(), d)
 		var idx2 = index(leaf2.Hash30(), d)
 
@@ -117,12 +117,12 @@ func newCompressedTable(grade bool, depth uint, leaf1 leafI, leaf2 flatLeaf) tab
 		// idx1 == idx2
 
 		// NOTE: This condition should never result. The condition is
-		// leaf1.Hash30() == leaf2.Hash30() all the way to maxDepth;
+		// leaf1.Hash30() == leaf2.Hash30() all the way to MaxDepth;
 		// because Hamt.newTable() is called only once, and after a
 		// leaf1.Hash30() == leaf2.Hash30() check. It is here for completeness.
 		log.Printf("compressed_table.go:newCompressedTable: SHOULD NOT BE CALLED")
 		if leaf1.Hash30() != leaf2.Hash30() {
-			log.Printf("madDepth=%d; d=%d; idx1=%d; idx2=%d", maxDepth, d, idx1, idx2)
+			log.Printf("madDepth=%d; d=%d; idx1=%d; idx2=%d", MaxDepth, d, idx1, idx2)
 			log.Panicf("newCompressedTable: %s != %s", hash30String(leaf1.Hash30()), hash30String(leaf2.Hash30()))
 		}
 		var newLeaf, _ = leaf1.put(leaf2.key, leaf2.val)
@@ -135,7 +135,7 @@ func newCompressedTable(grade bool, depth uint, leaf1 leafI, leaf2 flatLeaf) tab
 }
 
 // downgradeToCompressedTable() converts fullTable structs that have less than
-// tableCapacity/2 tableEntry's. One important thing we know is that none of
+// TableCapacity/2 tableEntry's. One important thing we know is that none of
 // the entries will collide with another.
 //
 // The ents []tableEntry slice is guaranteed to be in order from lowest idx to
@@ -222,7 +222,7 @@ func (t compressedTable) entries() []tableEntry {
 	var n = t.nentries()
 	var ents = make([]tableEntry, n)
 
-	for i, j := uint(0), uint(0); i < tableCapacity; i++ {
+	for i, j := uint(0), uint(0); i < TableCapacity; i++ {
 		var nodeBit = uint32(1 << i)
 
 		if (t.nodeMap & nodeBit) > 0 {
@@ -264,7 +264,7 @@ func (t compressedTable) insert(idx uint, entry nodeI) tableI {
 	// insert newnode into the i'th spot of nt.nodes[]
 	nt.nodes = append(nt.nodes[:i], append([]nodeI{entry}, nt.nodes[i:]...)...)
 
-	if t.grade && uint(len(nt.nodes)) >= tableCapacity/2 {
+	if t.grade && uint(len(nt.nodes)) >= UpgradeThreshold {
 		// promote compressedTable to fullTable
 		return upgradeToFullTable(nt.hashPath, nt.entries())
 	}
@@ -308,10 +308,10 @@ func (t compressedTable) remove(idx uint) tableI {
 //  was MIT License
 
 const (
-	octo_fives  = uint32(0x55555555)
-	octo_threes = uint32(0x33333333)
-	octo_ones   = uint32(0x01010101)
-	octo_fs     = uint32(0x0f0f0f0f)
+	octoFives  = uint32(0x55555555)
+	octoThrees = uint32(0x33333333)
+	octoOnes   = uint32(0x01010101)
+	octoFs     = uint32(0x0f0f0f0f)
 )
 
 // The bitCount32() function is a software based implementation of the POPCNT
@@ -319,7 +319,7 @@ const (
 //
 // This is copied from https://github.com/jddixon/xlUtil_go/blob/master/popCount.go
 func bitCount32(n uint32) uint {
-	n = n - ((n >> 1) & octo_fives)
-	n = (n & octo_threes) + ((n >> 2) & octo_threes)
-	return uint((((n + (n >> 4)) & octo_fs) * octo_ones) >> 24)
+	n = n - ((n >> 1) & octoFives)
+	n = (n & octoThrees) + ((n >> 2) & octoThrees)
+	return uint((((n + (n >> 4)) & octoFs) * octoOnes) >> 24)
 }

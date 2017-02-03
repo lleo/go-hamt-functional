@@ -21,21 +21,21 @@ import (
 	"github.com/lleo/go-hamt/key"
 )
 
-// nBits constant is the number of bits(5) a 30bit hash value is split into,
+// Nbits constant is the number of bits(5) a 30bit hash value is split into,
 // to provied the indexes of a HAMT.
-const nBits uint = 5
+const Nbits uint = 5
 
-// maxDepth constant is the maximum depth(5) of nBits values that constitute
-// the path in a HAMT, from [0..maxDepth]for a total of maxDepth+1(6) levels.
-// nBits*(maxDepth+1) == HASHBITS (ie 5*(5+1) == 30).
-const maxDepth uint = 5
+// MaxDepth constant is the maximum depth(5) of Nbits values that constitute
+// the path in a HAMT, from [0..MaxDepth]for a total of MaxDepth+1(6) levels.
+// Nbits*(MaxDepth+1) == HASHBITS (ie 5*(5+1) == 30).
+const MaxDepth uint = 5
 
-// tableCapacity constant is the number of table entries in a each node of
-// a HAMT datastructure; its value is 1<<nBits (ie 2^5 == 32).
-const tableCapacity uint = 1 << nBits
+// TableCapacity constant is the number of table entries in a each node of
+// a HAMT datastructure; its value is 1<<Nbits (ie 2^5 == 32).
+const TableCapacity uint = 1 << Nbits
 
 func hashPathMask(depth uint) uint32 {
-	return uint32(1<<((depth)*nBits)) - 1
+	return uint32(1<<((depth)*Nbits)) - 1
 }
 
 // Create a string of the form "/%02d/%02d..." to describe a hashPath of
@@ -59,24 +59,24 @@ func hashPathString(hashPath uint32, depth uint) string {
 }
 
 func hash30String(h30 uint32) string {
-	return hashPathString(h30, maxDepth)
+	return hashPathString(h30, MaxDepth)
 }
 
-//indexMask() generates a nBits(5-bit) mask for a given depth
+//indexMask() generates a Nbits(5-bit) mask for a given depth
 func indexMask(depth uint) uint32 {
-	return uint32(uint8(1<<nBits)-1) << (depth * nBits)
+	return uint32(uint8(1<<Nbits)-1) << (depth * Nbits)
 }
 
-//index() calculates a nBits(5-bit) integer based on the hash and depth
+//index() calculates a Nbits(5-bit) integer based on the hash and depth
 func index(h30 uint32, depth uint) uint {
 	var idxMask = indexMask(depth)
-	var idx = uint((h30 & idxMask) >> (depth * nBits))
+	var idx = uint((h30 & idxMask) >> (depth * Nbits))
 	return idx
 }
 
 //buildHashPath(hashPath, idx, depth)
 func buildHashPath(hashPath uint32, idx, depth uint) uint32 {
-	return hashPath | uint32(idx<<(depth*nBits))
+	return hashPath | uint32(idx<<(depth*Nbits))
 }
 
 type keyVal struct {
@@ -87,7 +87,7 @@ type keyVal struct {
 // Configuration contants to be passed to `hamt32.New(int) *Hamt`.
 const (
 	// HybridTables indicates the structure should use compressedTable
-	// initially, then upgrad to fullTable when appropriate.
+	// initially, then upgrade to fullTable when appropriate.
 	HybridTables = iota //0
 	// CompTablesOnly indicates the structure should use compressedTables ONLY.
 	// This was intended just save space, but also seems to be faster; CPU cache
@@ -111,6 +111,18 @@ func init() {
 	TableOptionName[FullTablesOnly] = "FullTablesOnly"
 }
 
+// UpgradeThreshold is a variable that defines when a compressedTable meats
+// or exceeds that number of entries, then that table will be upgraded to
+// a fullTable. This only applies when HybridTables option is chosen.
+// The current value is TableCapacity/2.
+var UpgradeThreshold = TableCapacity / 2
+
+// DowngradeThreshold is a variable that defines when a fullTable becomes
+// lower than that number of entries, then that table will be downgraded to
+// a compressedTable. This only applies when HybridTables option is chosen.
+// The current value is TableCapacity/4.
+var DowngradeThreshold = TableCapacity / 4
+
 type Hamt struct {
 	root            tableI
 	nentries        uint
@@ -122,7 +134,7 @@ type Hamt struct {
 //
 // `hamt32.HybridTables`:
 // Initially start out with compressedTable, but when the table is half full
-// upgrade to fullTable. If a fullTable shrinks to tableCapacity/8(4) entries
+// upgrade to fullTable. If a fullTable shrinks to TableCapacity/8(4) entries
 // downgrade to compressedTable.
 //
 // `hamt32.CompTablesOnly`:
@@ -204,7 +216,7 @@ func (h *Hamt) copyUp(oldTable, newTable tableI, path pathT) {
 		newParent = oldParent.replace(parentIdx, newTable)
 	}
 
-	h.copyUp(oldParent, newParent, path) //recurses at most maxDepth-1 times
+	h.copyUp(oldParent, newParent, path) //recurses at most MaxDepth-1 times
 
 	return
 }
@@ -220,7 +232,7 @@ func (h Hamt) Get(k key.Key) (interface{}, bool) {
 
 	var curTable = h.root
 
-	for depth := uint(0); depth <= maxDepth; depth++ {
+	for depth := uint(0); depth <= MaxDepth; depth++ {
 		var idx = index(h30, depth)
 		var curNode = curTable.get(idx)
 
@@ -238,7 +250,7 @@ func (h Hamt) Get(k key.Key) (interface{}, bool) {
 		//else curNode MUST BE A tableI
 		curTable = curNode.(tableI)
 	}
-	// curNode == nil || depth > maxDepth
+	// curNode == nil || depth > MaxDepth
 
 	return nil, false
 }
@@ -266,7 +278,7 @@ func (h Hamt) Put(k key.Key, v interface{}) (Hamt, bool) {
 	var curTable = h.root
 	var depth uint
 
-	for depth = 0; depth < maxDepth; depth++ {
+	for depth = 0; depth < MaxDepth; depth++ {
 		var idx = index(k.Hash30(), depth)
 		var curNode = curTable.get(idx)
 
@@ -293,7 +305,7 @@ func (h Hamt) Put(k key.Key, v interface{}) (Hamt, bool) {
 		path.push(curTable)
 		curTable = curNode.(tableI)
 	}
-	if depth == maxDepth {
+	if depth == MaxDepth {
 		var idx = index(k.Hash30(), depth)
 		var curNode = curTable.get(idx)
 
@@ -331,7 +343,7 @@ func (h Hamt) Del(k key.Key) (Hamt, interface{}, bool) {
 	var path = newPathT()
 	var curTable = h.root
 	var depth uint
-	for depth = 0; depth < maxDepth; depth++ {
+	for depth = 0; depth < MaxDepth; depth++ {
 		var idx = index(k.Hash30(), depth)
 		var curNode = curTable.get(idx)
 
@@ -365,7 +377,7 @@ func (h Hamt) Del(k key.Key) (Hamt, interface{}, bool) {
 		path.push(curTable)
 		curTable = curNode.(tableI)
 	}
-	if depth == maxDepth {
+	if depth == MaxDepth {
 		var idx = index(k.Hash30(), depth)
 		var curNode = curTable.get(idx)
 

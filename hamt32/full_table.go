@@ -9,7 +9,7 @@ import (
 type fullTable struct {
 	hashPath uint32 // depth*nBits of hash to get to this location in the Trie
 	numEnts  uint
-	nodes    [tableCapacity]nodeI
+	nodes    [TableCapacity]nodeI
 	grade    bool
 }
 
@@ -33,7 +33,7 @@ func newFullTable(grade bool, depth uint, leaf1 leafI, leaf2 flatLeaf) tableI {
 	var curTable = retTable
 	var hashPath = retTable.hashPath
 	var d uint
-	for d = depth; d < maxDepth; d++ {
+	for d = depth; d < MaxDepth; d++ {
 		var idx1 = index(leaf1.Hash30(), d)
 		var idx2 = index(leaf2.Hash30(), d)
 
@@ -59,8 +59,8 @@ func newFullTable(grade bool, depth uint, leaf1 leafI, leaf2 flatLeaf) tableI {
 		curTable = newTable
 	}
 	// We either BREAK out of the loop,
-	// OR we hit d == maxDepth.
-	if d == maxDepth {
+	// OR we hit d == MaxDepth.
+	if d == MaxDepth {
 		var idx1 = index(leaf1.Hash30(), d)
 		var idx2 = index(leaf2.Hash30(), d)
 
@@ -75,12 +75,12 @@ func newFullTable(grade bool, depth uint, leaf1 leafI, leaf2 flatLeaf) tableI {
 		// idx1 == idx2
 
 		// NOTE: This condition should never result. The condition is
-		// leaf1.Hash30() == leaf2.Hash30() all the way to maxDepth;
+		// leaf1.Hash30() == leaf2.Hash30() all the way to MaxDepth;
 		// because Hamt.newTable() is called only once, and after a
 		// leaf1.Hash30() == leaf2.Hash30() check. It is here for completeness.
 		log.Printf("full_table.go:newFullTable: SHOULD NOT BE CALLED")
 		if leaf1.Hash30() != leaf2.Hash30() {
-			log.Printf("madDepth=%d; d=%d; idx1=%d; idx2=%d", maxDepth, d, idx1, idx2)
+			log.Printf("madDepth=%d; d=%d; idx1=%d; idx2=%d", MaxDepth, d, idx1, idx2)
 			log.Panicf("newFullTable: %s != %s", hash30String(leaf1.Hash30()), hash30String(leaf2.Hash30()))
 		}
 		var newLeaf, _ = leaf1.put(leaf2.key, leaf2.val)
@@ -161,7 +161,7 @@ func (t fullTable) nentries() uint {
 func (t fullTable) entries() []tableEntry {
 	var n = t.nentries()
 	var ents = make([]tableEntry, n)
-	for i, j := uint(0), 0; i < tableCapacity; i++ {
+	for i, j := uint(0), 0; i < TableCapacity; i++ {
 		if t.nodes[i] != nil {
 			//The difference with compressedTable is t.nodes[i] vs. t.nodes[j]
 			ents[j] = tableEntry{i, t.nodes[i]}
@@ -197,7 +197,7 @@ func (t fullTable) remove(idx uint) tableI {
 	nt.nodes[idx] = nil
 	nt.numEnts--
 
-	if t.grade && nt.numEnts < tableCapacity/2 {
+	if t.grade && nt.numEnts < DowngradeThreshold {
 		return downgradeToCompressedTable(nt.hashPath, nt.entries())
 	}
 
