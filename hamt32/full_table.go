@@ -10,14 +10,12 @@ type fullTable struct {
 	hashPath uint32 // depth*nBits of hash to get to this location in the Trie
 	numEnts  uint
 	nodes    [TableCapacity]nodeI
-	grade    bool
 }
 
-func newRootFullTable(grade bool, leaf leafI) tableI {
+func createRootFullTable(leaf leafI) tableI {
 	var idx = index(leaf.Hash30(), 0)
 
 	var ft = new(fullTable)
-	ft.grade = grade
 	//ft.hashPath = 0
 	ft.numEnts = 1
 	ft.nodes[idx] = leaf
@@ -25,9 +23,8 @@ func newRootFullTable(grade bool, leaf leafI) tableI {
 	return ft
 }
 
-func newFullTable(grade bool, depth uint, leaf1 leafI, leaf2 flatLeaf) tableI {
+func createFullTable(depth uint, leaf1 leafI, leaf2 flatLeaf) tableI {
 	var retTable = new(fullTable)
-	retTable.grade = grade
 	retTable.hashPath = leaf1.Hash30() & hashPathMask(depth)
 
 	var curTable = retTable
@@ -50,7 +47,6 @@ func newFullTable(grade bool, depth uint, leaf1 leafI, leaf2 flatLeaf) tableI {
 		hashPath = buildHashPath(hashPath, idx1, d)
 
 		var newTable = new(fullTable)
-		newTable.grade = grade
 		newTable.hashPath = hashPath
 
 		curTable.numEnts = 1
@@ -92,7 +88,6 @@ func newFullTable(grade bool, depth uint, leaf1 leafI, leaf2 flatLeaf) tableI {
 
 func upgradeToFullTable(hashPath uint32, tabEnts []tableEntry) tableI {
 	var ft = new(fullTable)
-	ft.grade = true
 	ft.hashPath = hashPath
 	ft.numEnts = uint(len(tabEnts))
 
@@ -111,7 +106,6 @@ func (t fullTable) Hash30() uint32 {
 // copy() is required for nodeI
 func (t fullTable) copy() *fullTable {
 	var nt = new(fullTable)
-	nt.grade = t.grade
 	nt.hashPath = t.hashPath
 	nt.numEnts = t.numEnts
 	//for i := 0; i < len(t.nodes); i++ {
@@ -120,35 +114,6 @@ func (t fullTable) copy() *fullTable {
 	nt.nodes = t.nodes
 
 	return nt
-}
-
-// String() is required for nodeI
-func (t fullTable) String() string {
-	// fullTable{hashPath:/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d, nentries:%d,}
-	return fmt.Sprintf("fullTable{hashPath:%s, nentries()=%d}", hash30String(t.hashPath), t.nentries())
-}
-
-// LongString() is required for tableI
-func (t fullTable) LongString(indent string, depth uint) string {
-	var strs = make([]string, 2+len(t.nodes))
-
-	strs[0] = indent + fmt.Sprintf("fullTable{hashPath:%s, nentries()=%d,", hashPathString(t.hashPath, depth), t.nentries())
-
-	for i, n := range t.nodes {
-		if t.nodes[i] == nil {
-			strs[1+i] = indent + fmt.Sprintf("\tt.nodes[%d]: nil", i)
-		} else {
-			if t, ok := t.nodes[i].(tableI); ok {
-				strs[1+i] = indent + fmt.Sprintf("\tt.nodes[%d]:\n%s", i, t.LongString(indent+"\t", depth+1))
-			} else {
-				strs[1+i] = indent + fmt.Sprintf("\tt.nodes[%d]: %s", i, n)
-			}
-		}
-	}
-
-	strs[len(strs)-1] = indent + "}"
-
-	return strings.Join(strs, "\n")
 }
 
 // nentries() is required for tableI
@@ -197,7 +162,7 @@ func (t fullTable) remove(idx uint) tableI {
 	nt.nodes[idx] = nil
 	nt.numEnts--
 
-	if t.grade && nt.numEnts < DowngradeThreshold {
+	if GradeTables && nt.numEnts < DowngradeThreshold {
 		return downgradeToCompressedTable(nt.hashPath, nt.entries())
 	}
 
@@ -206,4 +171,33 @@ func (t fullTable) remove(idx uint) tableI {
 	}
 
 	return nt
+}
+
+// String() is required for nodeI
+func (t fullTable) String() string {
+	// fullTable{hashPath:/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d, nentries:%d,}
+	return fmt.Sprintf("fullTable{hashPath:%s, nentries()=%d}", hash30String(t.hashPath), t.nentries())
+}
+
+// LongString() is required for tableI
+func (t fullTable) LongString(indent string, depth uint) string {
+	var strs = make([]string, 2+len(t.nodes))
+
+	strs[0] = indent + fmt.Sprintf("fullTable{hashPath:%s, nentries()=%d,", hashPathString(t.hashPath, depth), t.nentries())
+
+	for i, n := range t.nodes {
+		if t.nodes[i] == nil {
+			strs[1+i] = indent + fmt.Sprintf("\tt.nodes[%d]: nil", i)
+		} else {
+			if t, ok := t.nodes[i].(tableI); ok {
+				strs[1+i] = indent + fmt.Sprintf("\tt.nodes[%d]:\n%s", i, t.LongString(indent+"\t", depth+1))
+			} else {
+				strs[1+i] = indent + fmt.Sprintf("\tt.nodes[%d]: %s", i, n)
+			}
+		}
+	}
+
+	strs[len(strs)-1] = indent + "}"
+
+	return strings.Join(strs, "\n")
 }
