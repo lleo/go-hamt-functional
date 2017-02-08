@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lleo/go-hamt/hamt64"
+	"github.com/lleo/go-hamt-functional/hamt64"
 	"github.com/lleo/go-hamt/key"
 	"github.com/lleo/go-hamt/stringkey"
 	"github.com/lleo/stringutil"
@@ -20,8 +20,8 @@ import (
 var numHugeKvs int = 5 * 1024 * 1024
 var hugeKvs []key.KeyVal
 
-var LookupHamt64 *hamt64.Hamt
-var DeleteHamt64 *hamt64.Hamt
+var LookupHamt64 hamt64.Hamt
+var DeleteHamt64 hamt64.Hamt
 
 var StartTime = make(map[string]time.Time)
 var RunTime = make(map[string]time.Duration)
@@ -75,37 +75,52 @@ func TestMain(m *testing.M) {
 	var xit int
 	//var tableOption int
 	if all {
-		TableOption = hamt64.FullTablesOnly
-		log.Printf("TestMain: TableOption == %s\n", hamt64.TableOptionName[TableOption])
-		initialize(TableOption)
+		//Full Tables Only
+		hamt64.GradeTables = false
+		hamt64.FullTableInit = true
+		log.Println("TestMain: Full Tables Only")
+		log.Printf("TestMain: GradeTables=%t; FullTableInit=%t\n", hamt64.GradeTables, hamt64.FullTableInit)
+		initialize()
 		xit = m.Run()
 		if xit != 0 {
 			os.Exit(1)
 		}
 
-		TableOption = hamt64.CompTablesOnly
-		log.Printf("TestMain: TableOption == %s\n", hamt64.TableOptionName[TableOption])
-		initialize(TableOption)
+		//Compressed Tables Only
+		hamt64.GradeTables = false
+		hamt64.FullTableInit = false
+		log.Println("TestMain: Compressed Tables Only")
+		log.Printf("TestMain: GradeTables=%t; FullTableInit=%t\n", hamt64.GradeTables, hamt64.FullTableInit)
+		initialize()
 		xit = m.Run()
 		if xit != 0 {
 			os.Exit(1)
 		}
 
-		TableOption = hamt64.HybridTables
-		log.Printf("TestMain: TableOption == %s\n", hamt64.TableOptionName[TableOption])
-		initialize(TableOption)
+		//Hybrid Tables
+		hamt64.GradeTables = true
+		hamt64.FullTableInit = false
+		log.Println("TestMain: Hybrid Tables")
+		log.Printf("TestMain: GradeTables=%t; FullTableInit=%t\n", hamt64.GradeTables, hamt64.FullTableInit)
+		initialize()
 		xit = m.Run()
 	} else {
 		if hybrid {
-			TableOption = hamt64.HybridTables
+			hamt64.GradeTables = true
+			hamt64.FullTableInit = false
+			log.Println("TestMain: Hybrid Tables")
 		} else if fullonly {
-			TableOption = hamt64.FullTablesOnly
+			hamt64.GradeTables = false
+			hamt64.FullTableInit = true
+			log.Println("TestMain: Full Tables Only")
 		} else /* if componly */ {
-			TableOption = hamt64.CompTablesOnly
+			hamt64.GradeTables = false
+			hamt64.FullTableInit = false
+			log.Println("TestMain: Compressed Tables Only")
 		}
 
-		log.Printf("TestMain: TableOption == %s\n", hamt64.TableOptionName[TableOption])
-		initialize(TableOption)
+		log.Printf("TestMain: GradeTables=%t; FullTableInit=%t\n", hamt64.GradeTables, hamt64.FullTableInit)
+		initialize()
 		xit = m.Run()
 	}
 
@@ -126,22 +141,25 @@ func RunTimes() string {
 	return s
 }
 
-func initialize(tableOption int) {
-	var funcName = fmt.Sprintf("hamt64: initialize(%s)", hamt64.TableOptionName[tableOption])
+func initialize() {
+	var funcName = "hamt64: initialize()"
 
-	var metricName = fmt.Sprintf("%s: build Lookup/Delete Hamt64", funcName)
+	var metricName = funcName + ": build Lookup/Delete Hamt64"
+	log.Println(metricName, "called.")
+	log.Printf("initialize: GradeTables=%t; FullTableInit=%t\n", hamt64.GradeTables, hamt64.FullTableInit)
 	StartTime[metricName] = time.Now()
 
-	LookupHamt64 = hamt64.New(tableOption)
-	DeleteHamt64 = hamt64.New(tableOption)
+	LookupHamt64 = hamt64.Hamt{}
+	DeleteHamt64 = hamt64.Hamt{}
 
 	for _, kv := range genRandomizedKvs(hugeKvs) {
-		inserted := LookupHamt64.Put(kv.Key, kv.Val)
+		var inserted bool
+		LookupHamt64, inserted = LookupHamt64.Put(kv.Key, kv.Val)
 		if !inserted {
 			log.Fatalf("failed to LookupHamt64.Put(%s, %v)", kv.Key, kv.Val)
 		}
 
-		inserted = DeleteHamt64.Put(kv.Key, kv.Val)
+		DeleteHamt64, inserted = DeleteHamt64.Put(kv.Key, kv.Val)
 		if !inserted {
 			log.Fatalf("failed to DeleteHamt64.Put(%s, %v)", kv.Key, kv.Val)
 		}
@@ -177,14 +195,15 @@ func genRandomizedKvs(kvs []key.KeyVal) []key.KeyVal {
 	return randKvs
 }
 
-//func rebuildDeleteHamt64(kvs []key.KeyVal) {
-//	for _, kv := range kvs {
-//		inserted := DeleteHamt64.Put(kv.Key, kv.Val)
-//		if !inserted {
-//			//log.Printf("BenchmarkHamt64Del: inserted,%v := DeleteHamt64.Put(%s, %d)", inserted, kv.Key, kv.Val)
-//
-//			// we delete inorder so we can stop rebuilding when the entries start existing
-//			break
-//		}
-//	}
-//}
+func rebuildDeleteHamt64(kvs []key.KeyVal) {
+	for _, kv := range kvs {
+		var inserted bool
+		DeleteHamt64, inserted = DeleteHamt64.Put(kv.Key, kv.Val)
+		if !inserted {
+			//log.Printf("BenchmarkHamt64Del: inserted,%v := DeleteHamt64.Put(%s, %d)", inserted, kv.Key, kv.Val)
+
+			// we delete inorder so we can stop rebuilding when the entries start existing
+			break
+		}
+	}
+}
