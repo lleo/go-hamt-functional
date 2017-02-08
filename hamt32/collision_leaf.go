@@ -8,10 +8,10 @@ import (
 )
 
 type collisionLeaf struct {
-	kvs []*key.KeyVal
+	kvs []key.KeyVal
 }
 
-func newCollisionLeaf(kvs []*key.KeyVal) *collisionLeaf {
+func newCollisionLeaf(kvs []key.KeyVal) *collisionLeaf {
 	leaf := new(collisionLeaf)
 	leaf.kvs = append(leaf.kvs, kvs...)
 
@@ -62,13 +62,13 @@ func (l collisionLeaf) put(key_ key.Key, val interface{}) (leafI, bool) {
 		if nl.kvs[i].Key.Equals(key_) { // Key.Equal() checks equal-by-value
 
 			// new key.KeyVal container, and keep the old l.kvs[i].Key object.
-			nl.kvs[i] = &key.KeyVal{l.kvs[i].Key, val}
+			nl.kvs[i] = key.KeyVal{l.kvs[i].Key, val}
 
 			return nl, false // key,val was not added, merely replaced Val
 		}
 	}
 
-	nl.kvs = append(nl.kvs, &key.KeyVal{key_, val})
+	nl.kvs = append(nl.kvs, key.KeyVal{key_, val})
 	return nl, true // key_,val was added
 }
 
@@ -93,9 +93,9 @@ func (l collisionLeaf) del(key_ key.Key) (leafI, interface{}, bool) {
 
 	var nl = l.copy()
 
-	for i := 0; i < len(nl.kvs); i++ {
+	for i := 0; i < len(l.kvs); i++ {
 		if l.kvs[i].Key.Equals(key_) {
-			var retVal = nl.kvs[i].Val
+			var retVal = l.kvs[i].Val
 
 			// removing the i'th element of a slice; wiki/SliceTricks "Delete"
 			nl.kvs = append(nl.kvs[:i], nl.kvs[i+1:]...)
@@ -107,6 +107,6 @@ func (l collisionLeaf) del(key_ key.Key) (leafI, interface{}, bool) {
 	return nil, nil, false
 }
 
-func (l collisionLeaf) keyVals() []*key.KeyVal {
+func (l collisionLeaf) keyVals() []key.KeyVal {
 	return l.kvs
 }
