@@ -17,7 +17,7 @@ import (
 )
 
 //var numHugeKvs int = 1024
-var numHugeKvs int = 5 * 1024 * 1024
+var numHugeKvs int = 2 * 1024 * 1024
 var hugeKvs []key.KeyVal
 
 var LookupHamt64 hamt64.Hamt
