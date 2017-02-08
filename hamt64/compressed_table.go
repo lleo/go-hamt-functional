@@ -156,53 +156,23 @@ func (t compressedTable) Hash60() uint64 {
 	return t.hashPath
 }
 
-func (t compressedTable) copy() *compressedTable {
+func (t compressedTable) copyExceptNodes() *compressedTable {
 	var nt = new(compressedTable)
 	nt.hashPath = t.hashPath
 	nt.nodeMap = t.nodeMap
-	nt.nodes = append(nt.nodes, t.nodes...)
+
 	return nt
 }
 
-func nodeMapString(nodeMap uint64) string {
-	var strs = make([]string, 4)
+func (t compressedTable) copy() *compressedTable {
+	var nt = t.copyExceptNodes()
 
-	var top2 = nodeMap >> 60
-	strs[0] = fmt.Sprintf("%02b", top2)
+	nt.nodes = append(nt.nodes, t.nodes...)
 
-	const tenBitMask uint64 = 1<<10 - 1
-	for i := uint(0); i < 3; i++ {
-		tenBitVal := (nodeMap & (tenBitMask << (i * 10))) >> (i * 10)
-		strs[3-i] = fmt.Sprintf("%010b", tenBitVal)
-	}
+	//nt.nodes = make([]nodeI, len(t.nodes))
+	//copy(nt.nodes, t.nodes)
 
-	return strings.Join(strs, " ")
-}
-
-//String() is required for nodeI depth
-func (t compressedTable) String() string {
-	// compressedTale{hashPath:/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d, nentries:%d,}
-	return fmt.Sprintf("compressedTable{hashPath:%s, nentries()=%d}",
-		hash60String(t.hashPath), t.nentries())
-}
-
-// LongString() is required for tableI
-func (t compressedTable) LongString(indent string, depth uint) string {
-	var strs = make([]string, 2+len(t.nodes))
-
-	strs[0] = indent + fmt.Sprintf("compressedTable{hashPath=%s, nentries()=%d, nodeMap=%s,", hashPathString(t.hashPath, depth), t.nentries(), nodeMapString(t.nodeMap))
-
-	for i, n := range t.nodes {
-		if t, ok := n.(tableI); ok {
-			strs[1+i] = indent + fmt.Sprintf("\tt.nodes[%d]:\n%s", i, t.LongString(indent+"\t", depth+1))
-		} else {
-			strs[1+i] = indent + fmt.Sprintf("\tt.nodes[%d]: %s", i, n.String())
-		}
-	}
-
-	strs[len(strs)-1] = indent + "}"
-
-	return strings.Join(strs, "\n")
+	return nt
 }
 
 func (t compressedTable) nentries() uint {
@@ -247,16 +217,24 @@ func (t compressedTable) get(idx uint) nodeI {
 }
 
 func (t compressedTable) insert(idx uint, entry nodeI) tableI {
-	// t.nodeMap & 1<<idx == 0
 	var nodeBit = uint64(1 << idx)
 	var bitMask = nodeBit - 1
 	var i = bitCount64(t.nodeMap & bitMask)
 
-	var nt = t.copy()
+	var nt = t.copyExceptNodes()
 	nt.nodeMap |= nodeBit
 
 	// insert newnode into the i'th spot of nt.nodes[]
-	nt.nodes = append(nt.nodes[:i], append([]nodeI{entry}, nt.nodes[i:]...)...)
+
+	// Slower append() way
+	//nt.nodes = append(nt.nodes, t.nodes...)
+	//nt.nodes = append(nt.nodes[:i], append([]nodeI{entry}, t.nodes[i:]...)...)
+
+	// Faster copy() way
+	nt.nodes = make([]nodeI, len(t.nodes)+1)
+	copy(nt.nodes[:i], t.nodes[:i])
+	nt.nodes[i] = entry
+	copy(nt.nodes[i+1:], t.nodes[i:])
 
 	if GradeTables && uint(len(nt.nodes)) >= UpgradeThreshold {
 		// promote compressedTable to fullTable
@@ -272,7 +250,14 @@ func (t compressedTable) replace(idx uint, entry nodeI) tableI {
 	var bitMask = nodeBit - 1
 	var i = bitCount64(t.nodeMap & bitMask)
 
-	var nt = t.copy()
+	var nt = t.copyExceptNodes()
+
+	// Slower append() way
+	//nt.nodes = append(nt.nodes, t.nodes...)
+
+	// Faster copy() way
+	nt.nodes = make([]nodeI, len(t.nodes))
+	copy(nt.nodes, t.nodes)
 
 	nt.nodes[i] = entry
 
@@ -280,21 +265,69 @@ func (t compressedTable) replace(idx uint, entry nodeI) tableI {
 }
 
 func (t compressedTable) remove(idx uint) tableI {
-	// t.nodeMap & 1<<idx > 0
 	var nodeBit = uint64(1 << idx)
 	var bitMask = nodeBit - 1
 	var i = bitCount64(t.nodeMap & bitMask)
 
-	var nt = t.copy()
+	var nt = t.copyExceptNodes()
 
 	nt.nodeMap &^= nodeBit
-	nt.nodes = append(nt.nodes[:i], nt.nodes[i+1:]...)
+
+	// Slower append() way
+	//nt.nodes = append(nt.nodes, t.nodes...)
+	//nt.nodes = append(nt.nodes[:i], t.nodes[i+1:]...)
+
+	// Faster copy() way
+	nt.nodes = make([]nodeI, len(t.nodes)-1)
+	copy(nt.nodes, t.nodes[:i])
+	copy(nt.nodes[i:], t.nodes[i+1:])
 
 	if nt.nodeMap == 0 {
 		return nil
 	}
 
 	return nt
+}
+
+func nodeMapString(nodeMap uint64) string {
+	var strs = make([]string, 4)
+
+	var top2 = nodeMap >> 60
+	strs[0] = fmt.Sprintf("%02b", top2)
+
+	const tenBitMask uint64 = 1<<10 - 1
+	for i := uint(0); i < 3; i++ {
+		tenBitVal := (nodeMap & (tenBitMask << (i * 10))) >> (i * 10)
+		strs[3-i] = fmt.Sprintf("%010b", tenBitVal)
+	}
+
+	return strings.Join(strs, " ")
+}
+
+//String() is required for nodeI depth
+func (t compressedTable) String() string {
+	// compressedTale{hashPath:/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d, nentries:%d,}
+	return fmt.Sprintf("compressedTable{hashPath:%s, nentries()=%d}",
+		hash60String(t.hashPath), t.nentries())
+}
+
+// LongString() is required for tableI
+func (t compressedTable) LongString(indent string, depth uint) string {
+	var strs = make([]string, 2+len(t.nodes))
+
+	strs[0] = indent + fmt.Sprintf("compressedTable{hashPath=%s, nentries()=%d, nodeMap=%s,", hashPathString(t.hashPath, depth), t.nentries(), nodeMapString(t.nodeMap))
+
+	for i, n := range t.nodes {
+		if t, ok := n.(tableI); ok {
+			strs[1+i] = indent + fmt.Sprintf("\tt.nodes[%d]:\n%s", i, t.LongString(indent+"\t", depth+1))
+		} else {
+			strs[1+i] = indent + fmt.Sprintf("\tt.nodes[%d]: %s", i, n.String())
+		}
+	}
+
+	strs[len(strs)-1] = indent + "}"
+
+	return strings.Join(strs, "\n")
 }
 
 //POPCNT Implementation
