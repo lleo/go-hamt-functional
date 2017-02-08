@@ -32,10 +32,10 @@ type leafI interface {
 	get(key key.Key) (interface{}, bool)
 	put(key key.Key, val interface{}) (leafI, bool) //bool == added? key/val pair
 	del(key key.Key) (leafI, interface{}, bool)     //bool == deleted? key
-	keyVals() []*key.KeyVal
+	keyVals() []key.KeyVal
 }
 
-type KeyVals []*key.KeyVal
+type KeyVals []key.KeyVal
 
 func (kvs KeyVals) contains(k0 key.Key) bool {
 	for _, kv := range kvs {
