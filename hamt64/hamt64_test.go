@@ -106,7 +106,7 @@ func BenchmarkHamt64Del(b *testing.B) {
 		}
 	}
 
-	if DeleteHamt64.IsEmpty() {
+	if h.IsEmpty() {
 		b.Fatal("DeleteHamt64.IsEmpty() => true; hence this wasn't a valid benchmark")
 	}
 
