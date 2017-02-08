@@ -265,7 +265,7 @@ func (h Hamt) Put(k key.Key, v interface{}) (Hamt, bool) {
 	return nh, added
 }
 
-// Hamt.Del(k) returns a new Hamt, the value deleted, and a boolean that
+// Del returns a new Hamt, the value deleted, and a boolean that
 // specifies whether or not the key was deleted (eg it didn't exist to start
 // with). Therefor you must always test deleted before using the new *Hamt
 // value.
@@ -328,7 +328,6 @@ func (h Hamt) Del(k key.Key) (Hamt, interface{}, bool) {
 		newLeaf, val, deleted = curLeaf.del(k)
 
 		if !deleted {
-			//return h, nil, false
 			return nh, val, deleted
 		}
 
