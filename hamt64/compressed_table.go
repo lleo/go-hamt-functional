@@ -167,10 +167,10 @@ func (t compressedTable) copyExceptNodes() *compressedTable {
 func (t compressedTable) copy() *compressedTable {
 	var nt = t.copyExceptNodes()
 
-	nt.nodes = append(nt.nodes, t.nodes...)
+	//nt.nodes = append(nt.nodes, t.nodes...)
 
-	//nt.nodes = make([]nodeI, len(t.nodes))
-	//copy(nt.nodes, t.nodes)
+	nt.nodes = make([]nodeI, len(t.nodes))
+	copy(nt.nodes, t.nodes)
 
 	return nt
 }
@@ -227,10 +227,10 @@ func (t compressedTable) insert(idx uint, entry nodeI) tableI {
 	// insert newnode into the i'th spot of nt.nodes[]
 
 	// Slower append() way
-	//nt.nodes = append(nt.nodes, t.nodes...)
+	//nt.nodes = append(nt.nodes, t.nodes[:i]...)
 	//nt.nodes = append(nt.nodes[:i], append([]nodeI{entry}, t.nodes[i:]...)...)
 
-	// Faster copy() way
+	// faster copy() way
 	nt.nodes = make([]nodeI, len(t.nodes)+1)
 	copy(nt.nodes[:i], t.nodes[:i])
 	nt.nodes[i] = entry
@@ -274,7 +274,7 @@ func (t compressedTable) remove(idx uint) tableI {
 	nt.nodeMap &^= nodeBit
 
 	// Slower append() way
-	//nt.nodes = append(nt.nodes, t.nodes...)
+	//nt.nodes = append(nt.nodes, t.nodes[:i]...)
 	//nt.nodes = append(nt.nodes[:i], t.nodes[i+1:]...)
 
 	// Faster copy() way
