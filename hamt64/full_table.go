@@ -116,35 +116,6 @@ func (t fullTable) copy() *fullTable {
 	return nt
 }
 
-// String() is required for nodeI
-func (t fullTable) String() string {
-	// fullTable{hashPath:/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d, nentries:%d,}
-	return fmt.Sprintf("fullTable{hashPath:%s, nentries()=%d}", hash60String(t.hashPath), t.nentries())
-}
-
-// LongString() is required for tableI
-func (t fullTable) LongString(indent string, depth uint) string {
-	var strs = make([]string, 2+len(t.nodes))
-
-	strs[0] = indent + fmt.Sprintf("fullTable{hashPath:%s, nentries()=%d,", hashPathString(t.hashPath, depth), t.nentries())
-
-	for i, n := range t.nodes {
-		if t.nodes[i] == nil {
-			strs[1+i] = indent + fmt.Sprintf("\tt.nodes[%d]: nil", i)
-		} else {
-			if t, ok := t.nodes[i].(tableI); ok {
-				strs[1+i] = indent + fmt.Sprintf("\tt.nodes[%d]:\n%s", i, t.LongString(indent+"\t", depth+1))
-			} else {
-				strs[1+i] = indent + fmt.Sprintf("\tt.nodes[%d]: %s", i, n)
-			}
-		}
-	}
-
-	strs[len(strs)-1] = indent + "}"
-
-	return strings.Join(strs, "\n")
-}
-
 // nentries() is required for tableI
 func (t fullTable) nentries() uint {
 	return t.numEnts
@@ -200,4 +171,33 @@ func (t fullTable) remove(idx uint) tableI {
 	}
 
 	return nt
+}
+
+// String() is required for nodeI
+func (t fullTable) String() string {
+	// fullTable{hashPath:/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d, nentries:%d,}
+	return fmt.Sprintf("fullTable{hashPath:%s, nentries()=%d}", hash60String(t.hashPath), t.nentries())
+}
+
+// LongString() is required for tableI
+func (t fullTable) LongString(indent string, depth uint) string {
+	var strs = make([]string, 2+len(t.nodes))
+
+	strs[0] = indent + fmt.Sprintf("fullTable{hashPath:%s, nentries()=%d,", hashPathString(t.hashPath, depth), t.nentries())
+
+	for i, n := range t.nodes {
+		if t.nodes[i] == nil {
+			strs[1+i] = indent + fmt.Sprintf("\tt.nodes[%d]: nil", i)
+		} else {
+			if t, ok := t.nodes[i].(tableI); ok {
+				strs[1+i] = indent + fmt.Sprintf("\tt.nodes[%d]:\n%s", i, t.LongString(indent+"\t", depth+1))
+			} else {
+				strs[1+i] = indent + fmt.Sprintf("\tt.nodes[%d]: %s", i, n)
+			}
+		}
+	}
+
+	strs[len(strs)-1] = indent + "}"
+
+	return strings.Join(strs, "\n")
 }
