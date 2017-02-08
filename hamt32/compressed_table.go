@@ -35,14 +35,12 @@ type compressedTable struct {
 	hashPath uint32 // depth*Nbits of hash to get to this location in the Trie
 	nodeMap  uint32
 	nodes    []nodeI
-	grade    bool
 }
 
-func newRootCompressedTable(grade bool, lf leafI) tableI {
+func createRootCompressedTable(lf leafI) tableI {
 	var idx = index(lf.Hash30(), 0)
 
 	var ct = new(compressedTable)
-	ct.grade = grade
 	//ct.hashPath = 0
 	ct.nodeMap = 1 << idx
 	ct.nodes = make([]nodeI, 1)
@@ -51,9 +49,8 @@ func newRootCompressedTable(grade bool, lf leafI) tableI {
 	return ct
 }
 
-func newCompressedTable(grade bool, depth uint, leaf1 leafI, leaf2 flatLeaf) tableI {
+func createCompressedTable(depth uint, leaf1 leafI, leaf2 flatLeaf) tableI {
 	var retTable = new(compressedTable)
-	retTable.grade = grade
 	retTable.hashPath = leaf1.Hash30() & hashPathMask(depth)
 
 	var curTable = retTable
@@ -85,7 +82,6 @@ func newCompressedTable(grade bool, depth uint, leaf1 leafI, leaf2 flatLeaf) tab
 		hashPath = buildHashPath(hashPath, idx1, d)
 
 		var newTable = new(compressedTable)
-		newTable.grade = grade
 		newTable.hashPath = hashPath
 
 		curTable.nodeMap = 1 << idx1 //Set the idx1'th bit
@@ -142,7 +138,6 @@ func newCompressedTable(grade bool, depth uint, leaf1 leafI, leaf2 flatLeaf) tab
 // highest. tableI.entries() also adhears to this contract.
 func downgradeToCompressedTable(hashPath uint32, ents []tableEntry) *compressedTable {
 	var nt = new(compressedTable)
-	nt.grade = true
 	nt.hashPath = hashPath
 	//nt.nodeMap = 0
 	nt.nodes = make([]nodeI, len(ents))
@@ -161,54 +156,22 @@ func (t compressedTable) Hash30() uint32 {
 	return t.hashPath
 }
 
-func (t compressedTable) copy() *compressedTable {
+func (t compressedTable) copyExceptNodes() *compressedTable {
 	var nt = new(compressedTable)
-	nt.grade = t.grade
 	nt.hashPath = t.hashPath
 	nt.nodeMap = t.nodeMap
-	nt.nodes = append(nt.nodes, t.nodes...)
 	return nt
 }
 
-func nodeMapString(nodeMap uint32) string {
-	var strs = make([]string, 4)
+func (t compressedTable) copy() *compressedTable {
+	var nt = t.copyExceptNodes()
 
-	var top2 = nodeMap >> 30
-	strs[0] = fmt.Sprintf("%02b", top2)
+	//nt.nodes = append(nt.nodes, t.nodes...)
 
-	const tenBitMask uint32 = 1<<10 - 1
-	for i := uint(0); i < 3; i++ {
-		tenBitVal := (nodeMap & (tenBitMask << (i * 10))) >> (i * 10)
-		strs[3-i] = fmt.Sprintf("%010b", tenBitVal)
-	}
+	nt.nodes = make([]nodeI, len(t.nodes))
+	copy(nt.nodes, t.nodes)
 
-	return strings.Join(strs, " ")
-}
-
-//String() is required for nodeI depth
-func (t compressedTable) String() string {
-	// compressedTale{hashPath:/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d, nentries:%d,}
-	return fmt.Sprintf("compressedTable{hashPath:%s, nentries()=%d}",
-		hash30String(t.hashPath), t.nentries())
-}
-
-// LongString() is required for tableI
-func (t compressedTable) LongString(indent string, depth uint) string {
-	var strs = make([]string, 2+len(t.nodes))
-
-	strs[0] = indent + fmt.Sprintf("compressedTable{hashPath=%s, nentries()=%d, nodeMap=%s,", hashPathString(t.hashPath, depth), t.nentries(), nodeMapString(t.nodeMap))
-
-	for i, n := range t.nodes {
-		if t, ok := n.(tableI); ok {
-			strs[1+i] = indent + fmt.Sprintf("\tt.nodes[%d]:\n%s", i, t.LongString(indent+"\t", depth+1))
-		} else {
-			strs[1+i] = indent + fmt.Sprintf("\tt.nodes[%d]: %s", i, n.String())
-		}
-	}
-
-	strs[len(strs)-1] = indent + "}"
-
-	return strings.Join(strs, "\n")
+	return nt
 }
 
 func (t compressedTable) nentries() uint {
@@ -253,18 +216,26 @@ func (t compressedTable) get(idx uint) nodeI {
 }
 
 func (t compressedTable) insert(idx uint, entry nodeI) tableI {
-	// t.nodeMap & 1<<idx == 0
 	var nodeBit = uint32(1 << idx)
 	var bitMask = nodeBit - 1
 	var i = bitCount32(t.nodeMap & bitMask)
 
-	var nt = t.copy()
+	var nt = t.copyExceptNodes()
 	nt.nodeMap |= nodeBit
 
 	// insert newnode into the i'th spot of nt.nodes[]
-	nt.nodes = append(nt.nodes[:i], append([]nodeI{entry}, nt.nodes[i:]...)...)
 
-	if t.grade && uint(len(nt.nodes)) >= UpgradeThreshold {
+	// Slower append() way
+	//nt.nodes = append(nt.nodes, t.nodes[:i]...)
+	//nt.nodes = append(nt.nodes[:i], append([]nodeI{entry}, nt.nodes[i:]...)...)
+
+	// Faster copy() way
+	nt.nodes = make([]nodeI, len(t.nodes)+1)
+	copy(nt.nodes, t.nodes[:i])
+	nt.nodes[i] = entry
+	copy(nt.nodes[i+1:], t.nodes[i:])
+
+	if GradeTables && uint(len(nt.nodes)) >= UpgradeThreshold {
 		// promote compressedTable to fullTable
 		return upgradeToFullTable(nt.hashPath, nt.entries())
 	}
@@ -278,7 +249,14 @@ func (t compressedTable) replace(idx uint, entry nodeI) tableI {
 	var bitMask = nodeBit - 1
 	var i = bitCount32(t.nodeMap & bitMask)
 
-	var nt = t.copy()
+	var nt = t.copyExceptNodes()
+
+	// Slower append() way
+	//nt.nodes = append(nt.nodes, t.nodes...)
+
+	// Faster copy() way
+	nt.nodes = make([]nodeI, len(t.nodes))
+	copy(nt.nodes, t.nodes)
 
 	nt.nodes[i] = entry
 
@@ -286,21 +264,69 @@ func (t compressedTable) replace(idx uint, entry nodeI) tableI {
 }
 
 func (t compressedTable) remove(idx uint) tableI {
-	// t.nodeMap & 1<<idx > 0
 	var nodeBit = uint32(1 << idx)
 	var bitMask = nodeBit - 1
 	var i = bitCount32(t.nodeMap & bitMask)
 
-	var nt = t.copy()
+	var nt = t.copyExceptNodes()
 
 	nt.nodeMap &^= nodeBit
-	nt.nodes = append(nt.nodes[:i], nt.nodes[i+1:]...)
+
+	// Slower append() way
+	//nt.nodes = append(nt.nodes, t.nodes[:i]...)
+	//nt.nodes = append(nt.nodes[:i], t.nodes[i+1:]...)
+
+	// Faster copy() way
+	nt.nodes = make([]nodeI, len(t.nodes)-1)
+	copy(nt.nodes, t.nodes[:i])
+	copy(nt.nodes[i:], t.nodes[i+1:])
 
 	if nt.nodeMap == 0 {
 		return nil
 	}
 
 	return nt
+}
+
+func nodeMapString(nodeMap uint32) string {
+	var strs = make([]string, 4)
+
+	var top2 = nodeMap >> 30
+	strs[0] = fmt.Sprintf("%02b", top2)
+
+	const tenBitMask uint32 = 1<<10 - 1
+	for i := uint(0); i < 3; i++ {
+		tenBitVal := (nodeMap & (tenBitMask << (i * 10))) >> (i * 10)
+		strs[3-i] = fmt.Sprintf("%010b", tenBitVal)
+	}
+
+	return strings.Join(strs, " ")
+}
+
+//String() is required for nodeI depth
+func (t compressedTable) String() string {
+	// compressedTale{hashPath:/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d, nentries:%d,}
+	return fmt.Sprintf("compressedTable{hashPath:%s, nentries()=%d}",
+		hash30String(t.hashPath), t.nentries())
+}
+
+// LongString() is required for tableI
+func (t compressedTable) LongString(indent string, depth uint) string {
+	var strs = make([]string, 2+len(t.nodes))
+
+	strs[0] = indent + fmt.Sprintf("compressedTable{hashPath=%s, nentries()=%d, nodeMap=%s,", hashPathString(t.hashPath, depth), t.nentries(), nodeMapString(t.nodeMap))
+
+	for i, n := range t.nodes {
+		if t, ok := n.(tableI); ok {
+			strs[1+i] = indent + fmt.Sprintf("\tt.nodes[%d]:\n%s", i, t.LongString(indent+"\t", depth+1))
+		} else {
+			strs[1+i] = indent + fmt.Sprintf("\tt.nodes[%d]: %s", i, n.String())
+		}
+	}
+
+	strs[len(strs)-1] = indent + "}"
+
+	return strings.Join(strs, "\n")
 }
 
 //POPCNT Implementation
