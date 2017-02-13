@@ -56,7 +56,7 @@ func TestMain(m *testing.M) {
 		all = true
 	}
 
-	// log
+	// log Config
 	log.SetFlags(log.Lshortfile)
 
 	var logfile, err = os.Create("test.log")
@@ -73,7 +73,7 @@ func TestMain(m *testing.M) {
 
 	// execute
 	var xit int
-	//var tableOption int
+
 	if all {
 		//Full Tables Only
 		hamt32.GradeTables = false
@@ -193,17 +193,4 @@ func genRandomizedKvs(kvs []key.KeyVal) []key.KeyVal {
 	}
 
 	return randKvs
-}
-
-func rebuildDeleteHamt32(kvs []key.KeyVal) {
-	for _, kv := range kvs {
-		var inserted bool
-		DeleteHamt32, inserted = DeleteHamt32.Put(kv.Key, kv.Val)
-		if !inserted {
-			//log.Printf("BenchmarkHamt32Del: inserted,%v := DeleteHamt32.Put(%s, %d)", inserted, kv.Key, kv.Val)
-
-			// we delete inorder so we can stop rebuilding when the entries start existing
-			break
-		}
-	}
 }
