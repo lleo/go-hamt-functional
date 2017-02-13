@@ -99,7 +99,7 @@ var FullTableInit = false
 // or exceeds that number of entries, then that table will be upgraded to
 // a fullTable. This only applies when HybridTables option is chosen.
 // The current value is TableCapacity/2.
-var UpgradeThreshold = TableCapacity / 2
+var UpgradeThreshold = TableCapacity * 2 / 3
 
 // DowngradeThreshold is a variable that defines when a fullTable becomes
 // lower than that number of entries, then that table will be downgraded to
