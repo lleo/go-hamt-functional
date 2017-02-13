@@ -49,14 +49,13 @@ func BenchmarkHamt32Get(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		var j = int(rand.Int31()) % numHugeKvs
 		var key = hugeKvs[j].Key
-		var val0 = hugeKvs[j].Val
-		var val, found = LookupHamt32.Get(key)
+		var val = int(hugeKvs[j].Val)
+		var v, found = LookupHamt32.Get(key)
 		if !found {
 			b.Fatalf("H.Get(%s) not found", key)
 		}
-		if val != val0 {
-			b.Fatalf("val,%v != hugeKvs[%d].val,%v", val, j, val0)
-			//b.Fatalf("val,%v != midKvs[%d].val,%v", val, j, val0)
+		if v != val {
+			b.Fatalf("val,%v != hugeKvs[%d].val,%v", v, j, val)
 		}
 	}
 }
@@ -68,7 +67,7 @@ func BenchmarkHamt32Put(b *testing.B) {
 	var s = "aaa"
 	for i := 0; i < b.N; i++ {
 		key := stringkey.New(s)
-		val := i + 1
+		val := i
 		h, _ = h.Put(key, val)
 		s = stringutil.DigitalInc(s)
 	}
