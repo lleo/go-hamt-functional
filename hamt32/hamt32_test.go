@@ -49,7 +49,7 @@ func BenchmarkHamt32Get(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		var j = int(rand.Int31()) % numHugeKvs
 		var key = hugeKvs[j].Key
-		var val = int(hugeKvs[j].Val)
+		var val = hugeKvs[j].Val
 		var v, found = LookupHamt32.Get(key)
 		if !found {
 			b.Fatalf("H.Get(%s) not found", key)
