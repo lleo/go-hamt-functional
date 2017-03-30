@@ -29,7 +29,7 @@ func (l collisionLeaf) String() string {
 	}
 	var jkvstr = strings.Join(kvstrs, ",")
 
-	return fmt.Sprintf("{kvs:[]kv{%s}}", jkvstr)
+	return fmt.Sprintf("collisionLeaf{kvs:[]key.KeyVal{%s}}", jkvstr)
 }
 
 func (l collisionLeaf) get(key key.Key) (interface{}, bool) {
