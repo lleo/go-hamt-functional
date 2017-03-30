@@ -52,7 +52,7 @@ func (kvs KeyVals) contains(k0 key.Key) bool {
 type tableI interface {
 	nodeI
 
-	LongString(indent string, depth uint) string
+	LongString(indent string) string
 
 	nentries() uint // get the number of nodeI entries
 
@@ -60,7 +60,7 @@ type tableI interface {
 	// from lowest index to highest.
 	entries() []tableEntry
 
-	get(idx uint) nodeI
+	Get(idx uint) nodeI
 
 	insert(idx uint, entry nodeI) tableI
 	replace(idx uint, entry nodeI) tableI
