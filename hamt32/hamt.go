@@ -370,14 +370,13 @@ func (h Hamt) String() string {
 	return fmt.Sprintf("Hamt{ nentries: %d, root: %s }", h.nentries, h.root)
 }
 
-const HalfIndent = "  "
-const FullIndent = "    "
+const fullIndent = "    "
 
 func (h Hamt) LongString(indent string) string {
 	var str string
 	if h.root != nil {
 		str = indent + fmt.Sprintf("Hamt{ nentries: %d, root:\n", h.nentries)
-		str += indent + h.root.LongString(indent+FullIndent)
+		str += indent + h.root.LongString(indent+fullIndent)
 		str += indent + "}"
 		return str
 	} else {
