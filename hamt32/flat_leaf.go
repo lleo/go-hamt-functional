@@ -19,6 +19,14 @@ func newFlatLeaf(key key.Key, val interface{}) *flatLeaf {
 	//return &flatLeaf{key, val}
 }
 
+func (l flatLeaf) Key() key.Key {
+	return l.key
+}
+
+func (l flatLeaf) Val() interface{} {
+	return l.val
+}
+
 // Hash30() is required for nodeI
 func (l flatLeaf) Hash30() uint32 {
 	return l.key.Hash30()
