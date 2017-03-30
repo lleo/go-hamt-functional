@@ -16,9 +16,11 @@ package hamt32
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/lleo/go-hamt/key"
+	"github.com/pkg/errors"
 )
 
 // Nbits constant is the number of bits(5) a 30bit hash value is split into,
@@ -35,13 +37,13 @@ const MaxDepth uint = 5
 const TableCapacity uint = 1 << Nbits
 
 func hashPathMask(depth uint) uint32 {
-	return uint32(1<<((depth)*Nbits)) - 1
+	return uint32(1<<(depth*Nbits)) - 1
 }
 
 // Create a string of the form "/%02d/%02d..." to describe a hashPath of
 // a given depth.
 //
-// If you want hashPathStrig() to include the current idx, you Must
+// If you want hashPathString() to include the current idx, you Must
 // add one to depth. You may need to do this because you are creating
 // a table to be put at the idx'th slot of the current table.
 func hashPathString(hashPath uint32, depth uint) string {
@@ -58,13 +60,45 @@ func hashPathString(hashPath uint32, depth uint) string {
 	return "/" + strings.Join(strs, "/")
 }
 
-func hash30String(h30 uint32) string {
+func h30ToString(h30 uint32) string {
 	return hashPathString(h30, MaxDepth)
+}
+
+func StringToH30(s string) uint32 {
+	if !strings.HasPrefix(s, "/") {
+		panic(errors.New("does not start with '/'"))
+	}
+	var s0 = s[1:]
+	var as = strings.Split(s0, "/")
+
+	var h30 uint32 = 0
+	for i, s1 := range as {
+		var ui, err = strconv.ParseUint(s1, 10, int(Nbits))
+		if err != nil {
+			panic(errors.Wrap(err, fmt.Sprintf("strconv.ParseUint(%q, %d, %d) failed", s1, 10, Nbits)))
+		}
+		h30 |= uint32(ui << (uint(i) * Nbits))
+		//fmt.Printf("%d: h30 = %q %2d %#02x %05b\n", i, s1, ui, ui, ui)
+	}
+
+	return h30
+}
+
+// h30ToBitStr is for printf debugging use
+func h30ToBitStr(h30 uint32) string {
+	var strs = make([]string, MaxDepth+1)
+
+	for depth := uint(0); depth <= MaxDepth; depth++ {
+		var idx = index(h30, depth)
+		strs[MaxDepth-depth] = fmt.Sprintf("%05b", idx)
+	}
+
+	return strings.Join(strs, " ")
 }
 
 //indexMask() generates a Nbits(5-bit) mask for a given depth
 func indexMask(depth uint) uint32 {
-	return uint32(uint8(1<<Nbits)-1) << (depth * Nbits)
+	return uint32((1<<Nbits)-1) << (depth * Nbits)
 }
 
 //index() calculates a Nbits(5-bit) integer based on the hash and depth
@@ -75,8 +109,12 @@ func index(h30 uint32, depth uint) uint {
 }
 
 //buildHashPath(hashPath, idx, depth)
+//hashPath will be depth Nbits long
 func buildHashPath(hashPath uint32, idx, depth uint) uint32 {
-	return hashPath | uint32(idx<<(depth*Nbits))
+	var mask uint32 = (1 << ((depth - 1) * Nbits)) - 1
+	hashPath = hashPath & mask
+
+	return hashPath | uint32(idx<<((depth-1)*Nbits))
 }
 
 type keyVal struct {
@@ -119,6 +157,14 @@ func (h Hamt) IsEmpty() bool {
 	return h == Hamt{}
 }
 
+func (h Hamt) Root() tableI {
+	return h.root
+}
+
+func (h Hamt) Nentries() uint {
+	return h.nentries
+}
+
 func createRootTable(leaf leafI) tableI {
 	if FullTableInit {
 		return createRootFullTable(leaf)
@@ -126,9 +172,10 @@ func createRootTable(leaf leafI) tableI {
 	return createRootCompressedTable(leaf)
 }
 
-func createTable(depth uint, leaf1 leafI, k key.Key, v interface{}) tableI {
+//func createTable(depth uint, leaf1 leafI, k key.Key, v interface{}) tableI {
+func createTable(depth uint, leaf1 leafI, leaf2 flatLeaf) tableI {
 	//var hashPath = k.Hash30() & hashPathMask(depth)
-	var leaf2 = *newFlatLeaf(k, v)
+	//var leaf2 = *newFlatLeaf(k, v)
 
 	if FullTableInit {
 		return createFullTable(depth, leaf1, leaf2)
@@ -138,18 +185,18 @@ func createTable(depth uint, leaf1 leafI, k key.Key, v interface{}) tableI {
 
 // copyUp is ONLY called on a fresh copy of the current Hamt. Hence, modifying
 // it is allowed.
-func (nh *Hamt) copyUp(oldTable, newTable tableI, path pathT) {
+func (nh *Hamt) persist(newTable tableI, path stack) {
 	if path.isEmpty() {
 		nh.root = newTable
 		return
 	}
 
-	var depth = uint(len(path))
+	var depth = uint(path.len())
 	var parentDepth = depth - 1
 
 	var oldParent = path.pop()
 
-	var parentIdx = index(oldTable.Hash30(), parentDepth)
+	var parentIdx = index(newTable.Hash30(), parentDepth)
 	var newParent tableI
 	if newTable == nil {
 		newParent = oldParent.remove(parentIdx)
@@ -157,43 +204,75 @@ func (nh *Hamt) copyUp(oldTable, newTable tableI, path pathT) {
 		newParent = oldParent.replace(parentIdx, newTable)
 	}
 
-	nh.copyUp(oldParent, newParent, path) //recurses at most MaxDepth-1 times
+	nh.persist(newParent, path) //recurses at most MaxDepth-1 times
 
 	return
+}
+
+func (h Hamt) find(k key.Key) (path stack, leaf leafI, idx uint) {
+	if h.IsEmpty() {
+		return nil, nil, 0
+	}
+
+	path = newStack()
+	var curTable = h.root
+
+	var h30 = k.Hash30()
+	var depth uint
+	var curNode nodeI
+
+	for depth = 0; depth < MaxDepth; depth++ {
+		path.push(curTable)
+		idx = index(h30, depth)
+		curNode = curTable.Get(idx)
+
+		switch n := curNode.(type) {
+		case nil:
+			return path, nil, idx
+		case leafI:
+			return path, n, idx
+		case tableI:
+			curTable = n
+			// exit switch then loop for
+		default:
+			panic(fmt.Sprintf("switch default case: depth=%d; idx=%d; curNode unknown type = %T; value = %v; path=%s", depth, idx, n, n, path))
+		}
+	}
+	if depth == MaxDepth {
+		path.push(curTable)
+		idx = index(h30, depth)
+		curNode = curTable.Get(idx)
+
+		if curNode == nil {
+			return path, nil, idx
+		} else if leaf, isLeaf := curNode.(leafI); isLeaf {
+			return path, leaf, idx
+		} else {
+			panic(fmt.Sprintf("depth,%d == MaxDepth: %d; idx=%d; unknown type = %T; value = %v; path=%s", depth, MaxDepth, idx, curNode, curNode, path))
+		}
+	}
+
+	panic("SHOULD NEVER GET HERE!")
 }
 
 // Get(k) retrieves the value for a given key from the Hamt. The bool
 // represents whether the key was found.
 func (h Hamt) Get(k key.Key) (interface{}, bool) {
-	if h.IsEmpty() {
+	var _, leaf, _ = h.find(k)
+
+	//var depth = path.len()
+	//var curTable = path.pop()
+
+	if leaf == nil {
 		return nil, false
 	}
 
-	var h30 = k.Hash30()
-
-	var curTable = h.root
-
-	for depth := uint(0); depth <= MaxDepth; depth++ {
-		var idx = index(h30, depth)
-		var curNode = curTable.get(idx)
-
-		if curNode == nil {
-			break
-		}
-
-		if leaf, ok := curNode.(leafI); ok {
-			if leaf.Hash30() == h30 {
-				return leaf.get(k)
-			}
-			return nil, false
-		}
-
-		//else curNode MUST BE A tableI
-		curTable = curNode.(tableI)
+	var val, found = leaf.get(k)
+	if !found {
+		return nil, false
 	}
-	// curNode == nil || depth > MaxDepth
 
-	return nil, false
+	return val, true
 }
 
 // Put new key/val pair into Hamt, returning a new persistant Hamt and a bool
@@ -201,66 +280,40 @@ func (h Hamt) Get(k key.Key) (interface{}, bool) {
 func (h Hamt) Put(k key.Key, v interface{}) (Hamt, bool) {
 	var nh = h
 
-	if h.IsEmpty() {
+	var path, leaf, idx = h.find(k)
+
+	if path == nil { // h.IsEmpty()
 		nh.root = createRootTable(newFlatLeaf(k, v))
 		nh.nentries++
 		return nh, true
 	}
 
+	var curTable = path.pop()
+	var depth = uint(path.len())
+
 	var newTable tableI
 	var added bool
 
-	// for-loop state is path, curTable and depth.
-	var path = newPathT()
-	var curTable = h.root
-	var depth uint
-
-	for depth = 0; depth < MaxDepth; depth++ {
-		var idx = index(k.Hash30(), depth)
-		var curNode = curTable.get(idx)
-
-		if curNode == nil {
-			newTable = curTable.insert(idx, newFlatLeaf(k, v))
-			added = true
-			break
-		}
-
-		if curLeaf, isLeaf := curNode.(leafI); isLeaf {
-			if curLeaf.Hash30() == k.Hash30() {
-				var newLeaf leafI
-				newLeaf, added = curLeaf.put(k, v)
-				newTable = curTable.replace(idx, newLeaf)
-				break
-			}
-
-			var tmpTable = createTable(depth+1, curLeaf, k, v)
+	if leaf == nil {
+		newTable = curTable.insert(idx, newFlatLeaf(k, v))
+		added = true
+	} else {
+		if leaf.Hash30() == k.Hash30() {
+			var newLeaf leafI
+			newLeaf, added = leaf.put(k, v)
+			newTable = curTable.replace(idx, newLeaf)
+		} else {
+			var tmpTable = createTable(depth+1, leaf, *newFlatLeaf(k, v))
 			newTable = curTable.replace(idx, tmpTable)
 			added = true
-			break
-		}
-
-		path.push(curTable)
-		curTable = curNode.(tableI)
-	}
-	if depth == MaxDepth {
-		var idx = index(k.Hash30(), depth)
-		var curNode = curTable.get(idx)
-
-		if curNode == nil {
-			newTable = curTable.insert(idx, newFlatLeaf(k, v))
-			added = true
-		} else {
-			var curLeaf = curNode.(leafI)
-			var newLeaf leafI
-			newLeaf, added = curLeaf.put(k, v)
-			newTable = curTable.replace(idx, newLeaf)
 		}
 	}
 
 	if added {
 		nh.nentries++
 	}
-	nh.copyUp(curTable, newTable, path)
+
+	nh.persist(newTable, path)
 
 	return nh, added
 }
@@ -272,63 +325,29 @@ func (h Hamt) Put(k key.Key, v interface{}) (Hamt, bool) {
 func (h Hamt) Del(k key.Key) (Hamt, interface{}, bool) {
 	var nh = h
 
+	var path, leaf, idx = h.find(k)
+
+	if path == nil { // h.IsEmpty()
+		return nh, nil, false
+	}
+
+	var curTable = path.pop()
+	//var depth = uint(path.len())
+
+	var newTable tableI
 	var val interface{}
 	var deleted bool
-	var newTable tableI
 
-	// for-loop state is path, curTable, and depth.
-	var path = newPathT()
-	var curTable = h.root
-	var depth uint
-	for depth = 0; depth < MaxDepth; depth++ {
-		var idx = index(k.Hash30(), depth)
-		var curNode = curTable.get(idx)
-
-		if curNode == nil {
-			//return h, nil, false
-			return nh, val, deleted
-		}
-
-		if curLeaf, ok := curNode.(leafI); ok {
-			var newLeaf leafI
-			newLeaf, val, deleted = curLeaf.del(k)
-
-			if !deleted {
-				//return h, nil, false
-				return nh, val, deleted
-			}
-
-			if newLeaf == nil {
-				newTable = curTable.remove(idx)
-			} else {
-				newTable = curTable.replace(idx, newLeaf)
-			}
-
-			break
-		}
-
-		// curNode is NOT nil & NOT a leafI, so curNode MUST BE a tableI.
-		// We are going to loop, so update loop state like path and curTable.
-		// for-loop will handle updating depth.
-
-		path.push(curTable)
-		curTable = curNode.(tableI)
-	}
-	if depth == MaxDepth {
-		var idx = index(k.Hash30(), depth)
-		var curNode = curTable.get(idx)
-
-		if curNode == nil {
-			return nh, val, deleted
-		}
-
-		var curLeaf = curNode.(leafI)
-
+	if leaf == nil {
+		//return nh, val, deleted
+		return h, nil, false
+	} else {
 		var newLeaf leafI
-		newLeaf, val, deleted = curLeaf.del(k)
+		newLeaf, val, deleted = leaf.del(k)
 
 		if !deleted {
-			return nh, val, deleted
+			//return nh, val, deleted
+			return h, nil, false
 		}
 
 		if newLeaf == nil {
@@ -338,8 +357,11 @@ func (h Hamt) Del(k key.Key) (Hamt, interface{}, bool) {
 		}
 	}
 
-	nh.nentries--
-	nh.copyUp(curTable, newTable, path)
+	if deleted {
+		nh.nentries--
+	}
+
+	nh.persist(newTable, path)
 
 	return nh, val, deleted
 }
@@ -348,11 +370,14 @@ func (h Hamt) String() string {
 	return fmt.Sprintf("Hamt{ nentries: %d, root: %s }", h.nentries, h.root)
 }
 
+const HalfIndent = "  "
+const FullIndent = "    "
+
 func (h Hamt) LongString(indent string) string {
 	var str string
 	if h.root != nil {
 		str = indent + fmt.Sprintf("Hamt{ nentries: %d, root:\n", h.nentries)
-		str += indent + h.root.LongString(indent, 0)
+		str += indent + h.root.LongString(indent+FullIndent)
 		str += indent + "}"
 		return str
 	} else {
