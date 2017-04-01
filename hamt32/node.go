@@ -52,7 +52,7 @@ func (kvs KeyVals) contains(k0 key.Key) bool {
 type tableI interface {
 	nodeI
 
-	LongString(indent string) string
+	LongString(indent string, recurse bool) string
 
 	nentries() uint // get the number of nodeI entries
 
