@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/lleo/go-hamt-functional/hamt32"
+	"github.com/lleo/go-hamt-functional/hamt64"
 	"github.com/lleo/go-hamt/key"
 	"github.com/lleo/go-hamt/stringkey"
 	"github.com/pkg/errors"
@@ -34,11 +35,8 @@ var SVS []StrVal
 var LookupMap map[string]int
 var DeleteMap map[string]int
 
-var LookupHamt32 hamt32.Hamt
-var DeleteHamt32 hamt32.Hamt
-
-//var LookupHamt64 hamt64.Hamt
-//var DeleteHamt64 hamt64.Hamt
+var TestHamt32 hamt32.Hamt
+var TestHamt64 hamt64.Hamt
 
 var Inc = stringutil.Lower.Inc
 
@@ -113,10 +111,10 @@ func TestMain(m *testing.M) {
 
 			log.Printf("allOpt: for type = %s\n", CFG)
 
-			LookupHamt32 = createHamt32("LookupHamt32", TYP)
-			//DeleteHamt32 = createHamt32("DeleteHamt32", TYP)
+			TestHamt32 = createHamt32("TestHamt32", TYP)
+			TestHamt64 = createHamt64("TestHamt64", TYP)
 
-			log.Println(LookupHamt32.LongString(""))
+			log.Println(TestHamt32.LongString(""))
 
 			fmt.Println("Running all tests:", CFG)
 			xit = m.Run()
@@ -156,8 +154,8 @@ func TestMain(m *testing.M) {
 
 		log.Printf("TestMain: GradeTables=%t; FullTableInit=%t\n", hamt32.GradeTables, hamt32.FullTableInit)
 
-		LookupHamt32 = createHamt32("LookupHamt32", TYP)
-		//DeleteHamt32 = createHamt32("DeleteHamt32", TYP)
+		TestHamt32 = createHamt32("TestHamt32", TYP)
+		TestHamt64 = createHamt64("TestHamt64", TYP)
 
 		xit = m.Run()
 
@@ -215,6 +213,26 @@ func createHamt32(hname string, typ int) hamt32.Hamt {
 	StartTime[name] = time.Now()
 
 	var h = hamt32.Hamt{}
+
+	for _, kv := range KVS {
+		var inserted bool
+		h, inserted = h.Put(kv.Key, kv.Val)
+		if !inserted {
+			log.Fatalf("failed to %s.Put(%s, %v)", hname, kv.Key, kv.Val)
+		}
+	}
+
+	RunTime[name] = time.Since(StartTime[name])
+
+	return h
+}
+
+func createHamt64(hname string, typ int) hamt64.Hamt {
+	var name = "createHamt64:" + hname + ":" + cfgStr[typ]
+	setLibrary(typ)
+	StartTime[name] = time.Now()
+
+	var h = hamt64.Hamt{}
 
 	for _, kv := range KVS {
 		var inserted bool
