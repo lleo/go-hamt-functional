@@ -29,7 +29,7 @@ func (l collisionLeaf) String() string {
 	}
 	var jkvstr = strings.Join(kvstrs, ",")
 
-	return fmt.Sprintf("{kvs:[]kv{%s}}", jkvstr)
+	return fmt.Sprintf("collisionLeaf{kvs:[]key.KeyVal{%s}}", jkvstr)
 }
 
 func (l collisionLeaf) get(key key.Key) (interface{}, bool) {
@@ -52,49 +52,49 @@ func (l collisionLeaf) copy() *collisionLeaf {
 
 // put insertes a new key,val pair into the leaf node, and returns a new leaf
 // and a bool representing if the new leaf is bigger (ie accumulated key/val pair).
-func (l collisionLeaf) put(k key.Key, val interface{}) (leafI, bool) {
+func (l collisionLeaf) put(key_ key.Key, val interface{}) (leafI, bool) {
 	var nl = l.copy()
 
-	// check if k is exact match of current key
+	// check if key_ is exact match of current key
 	// if exact match create new key.KeyVal container and update Val
 	// and return new leaf & bool
 	for i := 0; i < len(l.kvs); i++ {
-		if l.kvs[i].Key.Equals(k) { // Key.Equal() checks equal-by-value
+		if nl.kvs[i].Key.Equals(key_) { // Key.Equal() checks equal-by-value
 
 			// new key.KeyVal container, and keep the old l.kvs[i].Key object.
-			nl.kvs[i] = key.KeyVal{k, val}
+			nl.kvs[i] = key.KeyVal{l.kvs[i].Key, val}
 
 			return nl, false // key,val was not added, merely replaced Val
 		}
 	}
 
-	nl.kvs = append(nl.kvs, key.KeyVal{k, val})
-	return nl, true // k,val was added
+	nl.kvs = append(nl.kvs, key.KeyVal{key_, val})
+	return nl, true // key_,val was added
 }
 
-// del method searches current list of key.KeyVal objects, if k found
+// del method searches current list of key.KeyVal objects, if key_ found
 // remove matching key.KeyVal container, and return a new leafI, the removed
-// value, and a bool indicating if the k was found&removed.
-func (l collisionLeaf) del(k key.Key) (leafI, interface{}, bool) {
+// value, and a bool indicating if the key_ was found&removed.
+func (l collisionLeaf) del(key_ key.Key) (leafI, interface{}, bool) {
 
 	if len(l.kvs) == 2 {
 		// exhaustive search
-		// if k found new leaf will be a flatLeaf.
-		if l.kvs[0].Key.Equals(k) {
+		// if key_ found new leaf will be a flatLeaf.
+		if l.kvs[0].Key.Equals(key_) {
 			return newFlatLeaf(l.kvs[1].Key, l.kvs[1].Val), l.kvs[0].Val, true
 		}
-		if l.kvs[1].Key.Equals(k) {
+		if l.kvs[1].Key.Equals(key_) {
 			return newFlatLeaf(l.kvs[0].Key, l.kvs[0].Val), l.kvs[1].Val, true
 		}
 
-		// k not found, hence no deletion occured
+		// key_ not found, hence no deletion occured
 		return nil, nil, false
 	}
 
 	var nl = l.copy()
 
 	for i := 0; i < len(l.kvs); i++ {
-		if l.kvs[i].Key.Equals(k) {
+		if l.kvs[i].Key.Equals(key_) {
 			var retVal = l.kvs[i].Val
 
 			// removing the i'th element of a slice; wiki/SliceTricks "Delete"

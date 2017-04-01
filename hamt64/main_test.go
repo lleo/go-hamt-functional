@@ -16,12 +16,15 @@ import (
 	"github.com/pkg/errors"
 )
 
-//var numHugeKvs int = 1024
-var numHugeKvs int = 2 * 1024 * 1024
-var hugeKvs []key.KeyVal
+//var numKvs = 64
+//var numKvs int = 1024
+//var numKvs int = 2 * 1024 * 1024
+//var numKvs int = 512 * 1024
+var numKvs int = (3 * 1024 * 1024) + (4 * 1024) // between 3m+2k & 3m+4k
 
-var LookupHamt64 hamt64.Hamt
-var DeleteHamt64 hamt64.Hamt
+var KVS []key.KeyVal
+
+var TestHamt64 hamt64.Hamt
 
 var StartTime = make(map[string]time.Time)
 var RunTime = make(map[string]time.Duration)
@@ -56,7 +59,7 @@ func TestMain(m *testing.M) {
 		all = true
 	}
 
-	// log
+	// log Config
 	log.SetFlags(log.Lshortfile)
 
 	var logfile, err = os.Create("test.log")
@@ -69,11 +72,11 @@ func TestMain(m *testing.M) {
 
 	log.Println("TestMain: and so it begins...")
 
-	hugeKvs = buildKeyVals(numHugeKvs)
+	KVS = buildKeyVals(numKvs)
 
 	// execute
 	var xit int
-	//var tableOption int
+
 	if all {
 		//Full Tables Only
 		hamt64.GradeTables = false
@@ -144,24 +147,18 @@ func RunTimes() string {
 func initialize() {
 	var funcName = "hamt64: initialize()"
 
-	var metricName = funcName + ": build Lookup/Delete Hamt64"
+	var metricName = funcName + ": build TestHamt64"
 	log.Println(metricName, "called.")
 	log.Printf("initialize: GradeTables=%t; FullTableInit=%t\n", hamt64.GradeTables, hamt64.FullTableInit)
 	StartTime[metricName] = time.Now()
 
-	LookupHamt64 = hamt64.Hamt{}
-	DeleteHamt64 = hamt64.Hamt{}
+	TestHamt64 = hamt64.Hamt{}
 
-	for _, kv := range genRandomizedKvs(hugeKvs) {
+	for _, kv := range genRandomizedKvs(KVS) {
 		var inserted bool
-		LookupHamt64, inserted = LookupHamt64.Put(kv.Key, kv.Val)
+		TestHamt64, inserted = TestHamt64.Put(kv.Key, kv.Val)
 		if !inserted {
-			log.Fatalf("failed to LookupHamt64.Put(%s, %v)", kv.Key, kv.Val)
-		}
-
-		DeleteHamt64, inserted = DeleteHamt64.Put(kv.Key, kv.Val)
-		if !inserted {
-			log.Fatalf("failed to DeleteHamt64.Put(%s, %v)", kv.Key, kv.Val)
+			log.Fatalf("failed to TestHamt64.Put(%s, %v)", kv.Key, kv.Val)
 		}
 	}
 
@@ -193,17 +190,4 @@ func genRandomizedKvs(kvs []key.KeyVal) []key.KeyVal {
 	}
 
 	return randKvs
-}
-
-func rebuildDeleteHamt64(kvs []key.KeyVal) {
-	for _, kv := range kvs {
-		var inserted bool
-		DeleteHamt64, inserted = DeleteHamt64.Put(kv.Key, kv.Val)
-		if !inserted {
-			//log.Printf("BenchmarkHamt64Del: inserted,%v := DeleteHamt64.Put(%s, %d)", inserted, kv.Key, kv.Val)
-
-			// we delete inorder so we can stop rebuilding when the entries start existing
-			break
-		}
-	}
 }

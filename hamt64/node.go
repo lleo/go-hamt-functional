@@ -15,7 +15,7 @@ import (
 // The Hash60() method for leaf structs is the 60 most significant bits of
 // the keys hash.
 //
-// The Hash60() method for table structs is the depth*Nbits of the hash path
+// The Hash60() method for table structs is the depth*nBits of the hash path
 // that leads to the table's position in the Trie.
 //
 // For leafs Hash60() is the 60 bits returned by a keys Hash60().
@@ -52,7 +52,7 @@ func (kvs KeyVals) contains(k0 key.Key) bool {
 type tableI interface {
 	nodeI
 
-	LongString(indent string, depth uint) string
+	LongString(indent string, recurse bool) string
 
 	nentries() uint // get the number of nodeI entries
 
@@ -60,7 +60,7 @@ type tableI interface {
 	// from lowest index to highest.
 	entries() []tableEntry
 
-	get(idx uint) nodeI
+	Get(idx uint) nodeI
 
 	insert(idx uint, entry nodeI) tableI
 	replace(idx uint, entry nodeI) tableI

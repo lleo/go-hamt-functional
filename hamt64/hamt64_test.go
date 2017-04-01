@@ -13,21 +13,22 @@ import (
 
 func TestBuildHamt64(t *testing.T) {
 	log.Println("TestBuildHamt64:")
-	//var h = new(hamt64.Hamt)
 	var h = hamt64.Hamt{}
 
 	var added bool
-	for _, kv := range hugeKvs {
+	for _, kv := range KVS {
 		h, added = h.Put(kv.Key, kv.Val)
 		if !added {
 			t.Fatalf("failed to h.Put(%s, %v)", kv.Key, kv.Val)
 		}
 	}
+
 	//log.Println(h.LongString(""))
 
 	var val interface{}
 	var removed bool
-	for _, kv := range hugeKvs {
+	for _, kv := range KVS {
+		//log.Printf("kv.Key = %s", kv.Key)
 		h, val, removed = h.Del(kv.Key)
 		if !removed {
 			t.Fatalf("failed to h.Del(%s)", kv.Key)
@@ -36,6 +37,7 @@ func TestBuildHamt64(t *testing.T) {
 			t.Fatalf("val,%d != kv.Val,%d", val, kv.Val)
 		}
 	}
+
 	//log.Printf("h = %s", h.LongString(""))
 
 	if !h.IsEmpty() {
@@ -47,16 +49,16 @@ func BenchmarkHamt64Get(b *testing.B) {
 	log.Printf("BenchmarkHamt64Get: b.N=%d", b.N)
 
 	for i := 0; i < b.N; i++ {
-		var j = int(rand.Int31()) % numHugeKvs
-		var key = hugeKvs[j].Key
-		var val0 = hugeKvs[j].Val
-		var val, found = LookupHamt64.Get(key)
+		//var j = int(rand.Int31()) % numKvs
+		var j = rand.Int() % numKvs
+		var key = KVS[j].Key
+		var val = KVS[j].Val
+		var v, found = TestHamt64.Get(key)
 		if !found {
 			b.Fatalf("H.Get(%s) not found", key)
 		}
-		if val != val0 {
-			b.Fatalf("val,%v != hugeKvs[%d].val,%v", val, j, val0)
-			//b.Fatalf("val,%v != midKvs[%d].val,%v", val, j, val0)
+		if v != val {
+			b.Fatalf("val,%v != KVS[%d].val,%v", v, j, val)
 		}
 	}
 }
@@ -68,7 +70,7 @@ func BenchmarkHamt64Put(b *testing.B) {
 	var s = "aaa"
 	for i := 0; i < b.N; i++ {
 		key := stringkey.New(s)
-		val := i + 1
+		val := i
 		h, _ = h.Put(key, val)
 		s = stringutil.DigitalInc(s)
 	}
@@ -77,21 +79,15 @@ func BenchmarkHamt64Put(b *testing.B) {
 func BenchmarkHamt64Del(b *testing.B) {
 	log.Printf("BenchmarkHamt64Del: b.N=%d", b.N)
 
-	// We rebuild the DeleteHamt64 datastructure because this Benchmark will probably be
-	// rereun with different b.N values to get a better/more-accurate benchmark.
+	var h = TestHamt64
 
-	StartTime["BenchmarkHamt64Del:rebuildDeleteHamt64"] = time.Now()
-
-	//rebuildDeleteHamt64(hugeKvs)
-	var h = DeleteHamt64 //its functional and I am an idiot
-
-	RunTime["BenchmarkHamt64Del:rebuildDeleteHamt"] = time.Since(StartTime["BenchmarkHamt64Del:rebuildDeleteHamt64"])
+	var randomizedKVS = genRandomizedKvs(KVS)
 
 	b.ResetTimer()
 
 	StartTime["run BenchmarkHamt64Del"] = time.Now()
 	for i := 0; i < b.N; i++ {
-		kv := hugeKvs[i]
+		kv := randomizedKVS[i%numKvs]
 		key := kv.Key
 		val := kv.Val
 
@@ -99,7 +95,7 @@ func BenchmarkHamt64Del(b *testing.B) {
 		var deleted bool
 		h, v, deleted = h.Del(key)
 		if !deleted {
-			b.Fatalf("failed to find and delete key=%s", key)
+			b.Fatalf("failed to find and delet key=%s", key)
 		}
 		if v != val {
 			b.Fatalf("deleted key=%s but the value found was wrong v=%d, expected val=%d", key, v, val)
@@ -107,7 +103,7 @@ func BenchmarkHamt64Del(b *testing.B) {
 	}
 
 	if h.IsEmpty() {
-		b.Fatal("DeleteHamt64.IsEmpty() => true; hence this wasn't a valid benchmark")
+		b.Fatal("TestHamt64.IsEmpty() => true; hence this wasn't a valid benchmark")
 	}
 
 	RunTime["run BenchmarkHamt64Del"] = time.Since(StartTime["run BenchmarkHamt64Del"])

@@ -28,11 +28,12 @@ import (
 // To figure out the index of a node in the nodes slice from the index of the bit
 // in the nodeMap we first find out if that bit in the nodeMap is set by
 // calculating if "nodeMap & (1<<idx) > 0" is true the idx'th bit is set. Given
-// that each 64 entry table is indexed by 6bit section (2^==64) of the key hash,
+// that each 64 entry table is indexed by 5bit section (2^5==64) of the key hash,
 // there is a function to calculate the index called index(hash, depth);
 //
 type compressedTable struct {
 	hashPath uint64 // depth*Nbits of hash to get to this location in the Trie
+	depth    uint
 	nodeMap  uint64
 	nodes    []nodeI
 }
@@ -42,6 +43,7 @@ func createRootCompressedTable(lf leafI) tableI {
 
 	var ct = new(compressedTable)
 	//ct.hashPath = 0
+	//ct.depth = 0
 	ct.nodeMap = 1 << idx
 	ct.nodes = make([]nodeI, 1)
 	ct.nodes[0] = lf
@@ -52,6 +54,7 @@ func createRootCompressedTable(lf leafI) tableI {
 func createCompressedTable(depth uint, leaf1 leafI, leaf2 flatLeaf) tableI {
 	var retTable = new(compressedTable)
 	retTable.hashPath = leaf1.Hash60() & hashPathMask(depth)
+	retTable.depth = depth
 
 	var curTable = retTable
 	var hashPath = retTable.hashPath
@@ -79,10 +82,11 @@ func createCompressedTable(depth uint, leaf1 leafI, leaf2 flatLeaf) tableI {
 
 		curTable.nodes = make([]nodeI, 1)
 
-		hashPath = buildHashPath(hashPath, idx1, d)
+		hashPath = buildHashPath(hashPath, idx1, d+1)
 
 		var newTable = new(compressedTable)
 		newTable.hashPath = hashPath
+		newTable.depth = d + 1
 
 		curTable.nodeMap = 1 << idx1 //Set the idx1'th bit
 		curTable.nodes[0] = newTable
@@ -114,13 +118,17 @@ func createCompressedTable(depth uint, leaf1 leafI, leaf2 flatLeaf) tableI {
 
 		// NOTE: This condition should never result. The condition is
 		// leaf1.Hash60() == leaf2.Hash60() all the way to MaxDepth;
-		// because Hamt.newTable() is called only once, and after a
+		// because Hamt.createTable() is called only once, and after a
 		// leaf1.Hash60() == leaf2.Hash60() check. It is here for completeness.
-		log.Printf("compressed_table.go:createCompressedTable: SHOULD NOT BE CALLED")
+		log.Printf("compressed_table.go:newCompressedTable: SHOULD NOT BE CALLED")
+
+		// Check if the path of leaf1 is not equal to the one leaf2 just traversed.
 		if leaf1.Hash60() != leaf2.Hash60() {
 			log.Printf("madDepth=%d; d=%d; idx1=%d; idx2=%d", MaxDepth, d, idx1, idx2)
-			log.Panicf("createCompressedTable: %s != %s", hash60String(leaf1.Hash60()), hash60String(leaf2.Hash60()))
+			log.Panicf("newCompressedTable: %s != %s", h60ToString(leaf1.Hash60()), h60ToString(leaf2.Hash60()))
 		}
+
+		// Just for completeness; leaf1.Hash60() == leaf2.hash60()
 		var newLeaf, _ = leaf1.put(leaf2.key, leaf2.val)
 		curTable.nodes = make([]nodeI, 1)
 		curTable.nodeMap |= 1 << idx1
@@ -136,9 +144,10 @@ func createCompressedTable(depth uint, leaf1 leafI, leaf2 flatLeaf) tableI {
 //
 // The ents []tableEntry slice is guaranteed to be in order from lowest idx to
 // highest. tableI.entries() also adhears to this contract.
-func downgradeToCompressedTable(hashPath uint64, ents []tableEntry) *compressedTable {
+func downgradeToCompressedTable(hashPath uint64, depth uint, ents []tableEntry) *compressedTable {
 	var nt = new(compressedTable)
 	nt.hashPath = hashPath
+	nt.depth = depth
 	//nt.nodeMap = 0
 	nt.nodes = make([]nodeI, len(ents))
 
@@ -159,8 +168,8 @@ func (t compressedTable) Hash60() uint64 {
 func (t compressedTable) copyExceptNodes() *compressedTable {
 	var nt = new(compressedTable)
 	nt.hashPath = t.hashPath
+	nt.depth = t.depth
 	nt.nodeMap = t.nodeMap
-
 	return nt
 }
 
@@ -198,7 +207,7 @@ func (t compressedTable) entries() []tableEntry {
 	return ents
 }
 
-func (t compressedTable) get(idx uint) nodeI {
+func (t compressedTable) Get(idx uint) nodeI {
 	var nodeBit = uint64(1 << idx)
 
 	if (t.nodeMap & nodeBit) == 0 {
@@ -228,17 +237,17 @@ func (t compressedTable) insert(idx uint, entry nodeI) tableI {
 
 	// Slower append() way
 	//nt.nodes = append(nt.nodes, t.nodes[:i]...)
-	//nt.nodes = append(nt.nodes[:i], append([]nodeI{entry}, t.nodes[i:]...)...)
+	//nt.nodes = append(nt.nodes[:i], append([]nodeI{entry}, nt.nodes[i:]...)...)
 
-	// faster copy() way
+	// Faster copy() way
 	nt.nodes = make([]nodeI, len(t.nodes)+1)
-	copy(nt.nodes[:i], t.nodes[:i])
+	copy(nt.nodes, t.nodes[:i])
 	nt.nodes[i] = entry
 	copy(nt.nodes[i+1:], t.nodes[i:])
 
 	if GradeTables && uint(len(nt.nodes)) >= UpgradeThreshold {
 		// promote compressedTable to fullTable
-		return upgradeToFullTable(nt.hashPath, nt.entries())
+		return upgradeToFullTable(nt.hashPath, nt.depth, nt.entries())
 	}
 
 	return nt
@@ -306,22 +315,26 @@ func nodeMapString(nodeMap uint64) string {
 
 //String() is required for nodeI depth
 func (t compressedTable) String() string {
-	// compressedTale{hashPath:/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d, nentries:%d,}
-	return fmt.Sprintf("compressedTable{hashPath:%s, nentries()=%d}",
-		hash60String(t.hashPath), t.nentries())
+	// compressedTale{hashPath:/%d/%d/%d/%d/%d/%d, nentries:%d,}
+	return fmt.Sprintf("compressedTable{hashPath:%s, nentries()=%d, depth=%d}",
+		h60ToString(t.hashPath), t.nentries(), t.depth)
 }
 
 // LongString() is required for tableI
-func (t compressedTable) LongString(indent string, depth uint) string {
+func (t compressedTable) LongString(indent string, recurse bool) string {
 	var strs = make([]string, 2+len(t.nodes))
 
-	strs[0] = indent + fmt.Sprintf("compressedTable{hashPath=%s, nentries()=%d, nodeMap=%s,", hashPathString(t.hashPath, depth), t.nentries(), nodeMapString(t.nodeMap))
+	strs[0] = indent + fmt.Sprintf("compressedTable{hashPath=%s, nentries()=%d, t.depth=%d, nodeMap=%s,", hashPathString(t.hashPath, t.depth), t.nentries(), t.depth, nodeMapString(t.nodeMap))
 
 	for i, n := range t.nodes {
-		if t, ok := n.(tableI); ok {
-			strs[1+i] = indent + fmt.Sprintf("\tt.nodes[%d]:\n%s", i, t.LongString(indent+"\t", depth+1))
+		if tt, ok := n.(tableI); ok {
+			if recurse {
+				strs[1+i] = indent + fmt.Sprintf(halfIndent+"t.nodes[%d]:\n%s", i, tt.LongString(indent+fullIndent, recurse))
+			} else {
+				strs[1+i] = indent + fmt.Sprintf(halfIndent+"t.nodes[%d]: %s", i, tt.String())
+			}
 		} else {
-			strs[1+i] = indent + fmt.Sprintf("\tt.nodes[%d]: %s", i, n.String())
+			strs[1+i] = indent + fmt.Sprintf(halfIndent+"t.nodes[%d]: %s", i, n.String())
 		}
 	}
 

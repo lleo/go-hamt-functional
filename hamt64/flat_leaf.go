@@ -19,6 +19,14 @@ func newFlatLeaf(key key.Key, val interface{}) *flatLeaf {
 	//return &flatLeaf{key, val}
 }
 
+func (l flatLeaf) Key() key.Key {
+	return l.key
+}
+
+func (l flatLeaf) Val() interface{} {
+	return l.val
+}
+
 // Hash60() is required for nodeI
 func (l flatLeaf) Hash60() uint64 {
 	return l.key.Hash60()
