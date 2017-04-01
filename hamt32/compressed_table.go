@@ -118,13 +118,17 @@ func createCompressedTable(depth uint, leaf1 leafI, leaf2 flatLeaf) tableI {
 
 		// NOTE: This condition should never result. The condition is
 		// leaf1.Hash30() == leaf2.Hash30() all the way to MaxDepth;
-		// because Hamt.newTable() is called only once, and after a
+		// because Hamt.createTable() is called only once, and after a
 		// leaf1.Hash30() == leaf2.Hash30() check. It is here for completeness.
 		log.Printf("compressed_table.go:newCompressedTable: SHOULD NOT BE CALLED")
+
+		// Check if the path of leaf1 is not equal to the one leaf2 just traversed.
 		if leaf1.Hash30() != leaf2.Hash30() {
 			log.Printf("madDepth=%d; d=%d; idx1=%d; idx2=%d", MaxDepth, d, idx1, idx2)
 			log.Panicf("newCompressedTable: %s != %s", h30ToString(leaf1.Hash30()), h30ToString(leaf2.Hash30()))
 		}
+
+		// Just for completeness; leaf1.Hash30() == leaf2.hash30()
 		var newLeaf, _ = leaf1.put(leaf2.key, leaf2.val)
 		curTable.nodes = make([]nodeI, 1)
 		curTable.nodeMap |= 1 << idx1
@@ -317,16 +321,20 @@ func (t compressedTable) String() string {
 }
 
 // LongString() is required for tableI
-func (t compressedTable) LongString(indent string) string {
+func (t compressedTable) LongString(indent string, recurse bool) string {
 	var strs = make([]string, 2+len(t.nodes))
 
 	strs[0] = indent + fmt.Sprintf("compressedTable{hashPath=%s, nentries()=%d, t.depth=%d, nodeMap=%s,", hashPathString(t.hashPath, t.depth), t.nentries(), t.depth, nodeMapString(t.nodeMap))
 
 	for i, n := range t.nodes {
 		if tt, ok := n.(tableI); ok {
-			strs[1+i] = indent + fmt.Sprintf(HalfIndent+"t.nodes[%d]:\n%s", i, tt.LongString(indent+FullIndent))
+			if recurse {
+				strs[1+i] = indent + fmt.Sprintf(halfIndent+"t.nodes[%d]:\n%s", i, tt.LongString(indent+fullIndent, recurse))
+			} else {
+				strs[1+i] = indent + fmt.Sprintf(halfIndent+"t.nodes[%d]: %s", i, tt.String())
+			}
 		} else {
-			strs[1+i] = indent + fmt.Sprintf(HalfIndent+"t.nodes[%d]: %s", i, n.String())
+			strs[1+i] = indent + fmt.Sprintf(halfIndent+"t.nodes[%d]: %s", i, n.String())
 		}
 	}
 

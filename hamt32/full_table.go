@@ -76,13 +76,17 @@ func createFullTable(depth uint, leaf1 leafI, leaf2 flatLeaf) tableI {
 
 		// NOTE: This condition should never result. The condition is
 		// leaf1.Hash30() == leaf2.Hash30() all the way to MaxDepth;
-		// because Hamt.newTable() is called only once, and after a
+		// because Hamt.createTable() is called only once, and after a
 		// leaf1.Hash30() == leaf2.Hash30() check. It is here for completeness.
 		log.Printf("full_table.go:createFullTable: SHOULD NOT BE CALLED")
+
+		// Check if the path of leaf1 is not equal to the one leaf2 just traversed.
 		if leaf1.Hash30() != leaf2.Hash30() {
 			log.Printf("MaxDepth=%d; d=%d; idx1=%d; idx2=%d", MaxDepth, d, idx1, idx2)
 			log.Panicf("createFullTable: %s,0x%06x != %s,0x%06x", h30ToString(leaf1.Hash30()), leaf1.Hash30(), h30ToString(leaf2.Hash30()), leaf2.Hash30())
 		}
+
+		// Just for completeness; leaf1.Hash30() == leaf2.hash30()
 		var newLeaf, _ = leaf1.put(leaf2.key, leaf2.val)
 		curTable.insert(idx1, newLeaf)
 	}
@@ -162,6 +166,7 @@ func (t fullTable) replace(idx uint, entry nodeI) tableI {
 	return nt
 }
 
+//func (t fullTable) remove(idx uint) nodeI {
 func (t fullTable) remove(idx uint) tableI {
 	// t.nodes[idx] != nil
 	var nt = t.copy()
@@ -186,7 +191,7 @@ func (t fullTable) String() string {
 }
 
 // LongString() is required for tableI
-func (t fullTable) LongString(indent string) string {
+func (t fullTable) LongString(indent string, recurse bool) string {
 	//var strs = make([]string, 2+len(t.nodes))
 	var strs = make([]string, 2+t.nentries())
 
@@ -195,13 +200,17 @@ func (t fullTable) LongString(indent string) string {
 	var j int
 	for i, n := range t.nodes {
 		//if n == nil {
-		//	strs[1+i] = indent + fmt.Sprintf(HalfIndent+"t.nodes[%d]: nil", i)
+		//	strs[1+i] = indent + fmt.Sprintf(halfIndent+"t.nodes[%d]: nil", i)
 		//} else {
 		if n != nil {
 			if tt, ok := n.(tableI); ok {
-				strs[1+j] = indent + fmt.Sprintf(HalfIndent+"t.nodes[%d]:\n%s", i, tt.LongString(indent+"\t"))
+				if recurse {
+					strs[1+j] = indent + fmt.Sprintf(halfIndent+"t.nodes[%d]:\n%s", i, tt.LongString(indent+fullIndent, recurse))
+				} else {
+					strs[1+j] = indent + fmt.Sprintf(halfIndent+"t.nodes[%d]: %s", i, tt.String())
+				}
 			} else {
-				strs[1+j] = indent + fmt.Sprintf(HalfIndent+"t.nodes[%d]: %s", i, n)
+				strs[1+j] = indent + fmt.Sprintf(halfIndent+"t.nodes[%d]: %s", i, n)
 			}
 			j++
 		}
