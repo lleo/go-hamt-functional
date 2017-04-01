@@ -2,29 +2,29 @@ package hamt32
 
 import "strings"
 
-type stack interface {
+type tableStack interface {
 	peek() tableI
 	pop() tableI
-	push(tableI) stack
-	shift() tableI
-	unshift(tableI) stack
+	push(tableI) tableStack
+	//shift() tableI
+	//unshift(tableI) tableStack
 	isEmpty() bool
 	len() int
 }
 
 //
-// []tableI implementation of "stack interface".
+// []tableI implementation of "tableStack interface".
 //
 
 type tableSlice []tableI
 
-// Constructs an tableSlice impl of the stack interface.
-//func newStack() tableSlice {
+// Constructs an tableSlice impl of the tableStack interface.
+//func newTableStack() tableSlice {
 //	return make(tableSlice, 0, MaxDepth)
 //}
 
-// Constructs an tableSlice impl of the stack interface.
-func newStack() stack {
+// Constructs an tableSlice impl of the tableStack interface.
+func newTableStack() tableStack {
 	var ts = make(tableSlice, 0, MaxDepth)
 	return &ts
 }
@@ -39,7 +39,7 @@ func (path *tableSlice) peek() tableI {
 
 // Put a new tableI in the path object.
 // You should never push nil, but we are not checking to prevent this.
-func (path *tableSlice) push(tab tableI) stack {
+func (path *tableSlice) push(tab tableI) tableStack {
 	//_ = ASSERT && Assert(tab != nil, "tableSlice.push(nil) not allowed")
 	*path = append(*path, tab)
 	return path
@@ -57,16 +57,16 @@ func (path *tableSlice) pop() tableI {
 	return parent
 }
 
-func (path *tableSlice) shift() tableI {
-	var t tableI
-	t, *path = (*path)[0], (*path)[1:]
-	return t
-}
-
-func (path *tableSlice) unshift(t tableI) stack {
-	*path = append([]tableI{t}, (*path)...)
-	return path
-}
+//func (path *tableSlice) shift() tableI {
+//	var t tableI
+//	t, *path = (*path)[0], (*path)[1:]
+//	return t
+//}
+//
+//func (path *tableSlice) unshift(t tableI) tableStack {
+//	*path = append([]tableI{t}, (*path)...)
+//	return path
+//}
 
 // path.isEmpty() returns true if there are no entries in the path object,
 // otherwise it returns false.
