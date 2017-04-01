@@ -185,7 +185,7 @@ func createTable(depth uint, leaf1 leafI, leaf2 flatLeaf) tableI {
 
 // copyUp is ONLY called on a fresh copy of the current Hamt. Hence, modifying
 // it is allowed.
-func (nh *Hamt) persist(newTable tableI, path stack) {
+func (nh *Hamt) persist(oldTable, newTable tableI, path tableStack) {
 	if path.isEmpty() {
 		nh.root = newTable
 		return
@@ -194,27 +194,28 @@ func (nh *Hamt) persist(newTable tableI, path stack) {
 	var depth = uint(path.len())
 	var parentDepth = depth - 1
 
-	var oldParent = path.pop()
+	var parentIdx = index(oldTable.Hash30(), parentDepth)
 
-	var parentIdx = index(newTable.Hash30(), parentDepth)
+	var oldParent = path.pop()
 	var newParent tableI
+
 	if newTable == nil {
 		newParent = oldParent.remove(parentIdx)
 	} else {
 		newParent = oldParent.replace(parentIdx, newTable)
 	}
 
-	nh.persist(newParent, path) //recurses at most MaxDepth-1 times
+	nh.persist(oldParent, newParent, path) //recurses at most MaxDepth-1 times
 
 	return
 }
 
-func (h Hamt) find(k key.Key) (path stack, leaf leafI, idx uint) {
+func (h Hamt) find(k key.Key) (path tableStack, leaf leafI, idx uint) {
 	if h.IsEmpty() {
 		return nil, nil, 0
 	}
 
-	path = newStack()
+	path = newTableStack()
 	var curTable = h.root
 
 	var h30 = k.Hash30()
@@ -278,7 +279,7 @@ func (h Hamt) Get(k key.Key) (interface{}, bool) {
 // Put new key/val pair into Hamt, returning a new persistant Hamt and a bool
 // indicating if the key/val pair was added(true) or mearly updated(false).
 func (h Hamt) Put(k key.Key, v interface{}) (Hamt, bool) {
-	var nh = h
+	var nh Hamt = h //copy by value
 
 	var path, leaf, idx = h.find(k)
 
@@ -313,7 +314,7 @@ func (h Hamt) Put(k key.Key, v interface{}) (Hamt, bool) {
 		nh.nentries++
 	}
 
-	nh.persist(newTable, path)
+	nh.persist(curTable, newTable, path)
 
 	return nh, added
 }
@@ -323,7 +324,7 @@ func (h Hamt) Put(k key.Key, v interface{}) (Hamt, bool) {
 // with). Therefor you must always test deleted before using the new *Hamt
 // value.
 func (h Hamt) Del(k key.Key) (Hamt, interface{}, bool) {
-	var nh = h
+	var nh Hamt = h // copy by value
 
 	var path, leaf, idx = h.find(k)
 
@@ -361,7 +362,7 @@ func (h Hamt) Del(k key.Key) (Hamt, interface{}, bool) {
 		nh.nentries--
 	}
 
-	nh.persist(newTable, path)
+	nh.persist(curTable, newTable, path)
 
 	return nh, val, deleted
 }
@@ -370,14 +371,15 @@ func (h Hamt) String() string {
 	return fmt.Sprintf("Hamt{ nentries: %d, root: %s }", h.nentries, h.root)
 }
 
+const halfIndent = "  "
 const fullIndent = "    "
 
 func (h Hamt) LongString(indent string) string {
 	var str string
 	if h.root != nil {
 		str = indent + fmt.Sprintf("Hamt{ nentries: %d, root:\n", h.nentries)
-		str += indent + h.root.LongString(indent+fullIndent)
-		str += indent + "}"
+		str += indent + h.root.LongString(indent+fullIndent, true)
+		str += indent + "}end\n"
 		return str
 	} else {
 		str = indent + fmt.Sprintf("Hamt{ nentries: %d, root: nil }", h.nentries)
