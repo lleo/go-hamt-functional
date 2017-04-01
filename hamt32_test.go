@@ -11,7 +11,7 @@ import (
 	"github.com/lleo/stringutil"
 )
 
-func TestPutOne(t *testing.T) {
+func TestPutOne32(t *testing.T) {
 	var h = hamt32.Hamt{}
 	var k = stringkey.New("aaa")
 	var v = 1
@@ -28,7 +28,7 @@ func TestPutOne(t *testing.T) {
 // Used progs/findCollisionDepth0.go to find collison at depth 0 for "aaa".
 // s = aaa; H30 = /01/28/12/24/09/03;
 // s = abh; H30 = /01/26/11/24/25/01;
-func TestCollisionCreatesTable(t *testing.T) {
+func TestCollisionCreatesTable32(t *testing.T) {
 	var h = hamt32.Hamt{}
 	var k0 = stringkey.New("aaa")
 	var k1 = stringkey.New("abh")
@@ -97,14 +97,14 @@ func TestBuildHamt32(t *testing.T) {
 	RunTime[name] = time.Since(StartTime[name])
 }
 
-func TestLookupAll(t *testing.T) {
+func TestLookupAll32(t *testing.T) {
 	var name = "TestLookupAll:" + CFG
 
 	//StartTime[name+"-full"] = time.Now()
 	//
-	//var _, f = LookupHamt32.Get(stringkey.New("aaa"))
+	//var _, f = TestHamt32.Get(stringkey.New("aaa"))
 	//if !f {
-	//	LookupHamt32 = createHamt32("LookupAll:LookupHamt32", TYP)
+	//	TestHamt32 = createHamt32("LookupAll:TestHamt32", TYP)
 	//}
 
 	StartTime[name] = time.Now()
@@ -113,9 +113,9 @@ func TestLookupAll(t *testing.T) {
 		var k = kv.Key
 		var v = kv.Val
 
-		var val, found = LookupHamt32.Get(k)
+		var val, found = TestHamt32.Get(k)
 		if !found {
-			t.Fatalf("Failed to LookupHamt32.Get(k): k=%s\n", k)
+			t.Fatalf("Failed to TestHamt32.Get(k): k=%s\n", k)
 		}
 		if val != v {
 			t.Fatalf("Found value not equal to expected value: v,%d != val,%d\n", k, val)
@@ -126,11 +126,11 @@ func TestLookupAll(t *testing.T) {
 	//RunTime[name+"-full"] = time.Since(StartTime[name+"-full"])
 }
 
-func TestDeleteAll(t *testing.T) {
+func TestDeleteAll32(t *testing.T) {
 	var name = "TestDeleteAll" + CFG
 
 	StartTime[name] = time.Now()
-	var h = LookupHamt32
+	var h = TestHamt32
 
 	for _, kv := range KVS {
 		var k = kv.Key
@@ -153,17 +153,17 @@ func TestDeleteAll(t *testing.T) {
 func BenchmarkHamt32Get(b *testing.B) {
 	log.Printf("BenchmarkHamt32Get: b.N=%d", b.N)
 
-	//var _, f = LookupHamt32.Get(stringkey.New("aaa"))
+	//var _, f = TestHamt32.Get(stringkey.New("aaa"))
 	//if !f {
-	//	LookupHamt32 = createHamt32("LookupHamt32", TYP)
+	//	TestHamt32 = createHamt32("TestHamt32", TYP)
 	//	b.ResetTimer()
 	//}
 
 	for i := 0; i < b.N; i++ {
-		var j = int(rand.Int31()) % numKvs
+		var j = rand.Int() % numKvs
 		var key = KVS[j].Key
 		var val = KVS[j].Val
-		var v, found = LookupHamt32.Get(key)
+		var v, found = TestHamt32.Get(key)
 		if !found {
 			b.Fatalf("H.Get(%s) not found", key)
 		}
@@ -189,14 +189,9 @@ func BenchmarkHamt32Put(b *testing.B) {
 func BenchmarkHamt32Del(b *testing.B) {
 	log.Printf("BenchmarkHamt32Del: b.N=%d", b.N)
 
-	StartTime["BenchmarkHamt32Del:rebuildDeleteHamt32"] = time.Now()
-
-	DeleteHamt32 = createHamt32("DeleteHamt32", TYP)
 	b.ResetTimer()
 
-	var h = DeleteHamt32
-
-	RunTime["BenchmarkHamt32Del:rebuildDeleteHamt"] = time.Since(StartTime["BenchmarkHamt32Del:rebuildDeleteHamt32"])
+	var h = TestHamt32
 
 	b.ResetTimer()
 
@@ -218,7 +213,7 @@ func BenchmarkHamt32Del(b *testing.B) {
 	}
 
 	if h.IsEmpty() {
-		b.Fatal("DeleteHamt32.IsEmpty() => true; hence this wasn't a valid benchmark")
+		b.Fatal("h.IsEmpty() => true; hence this wasn't a valid benchmark")
 	}
 
 	RunTime["run BenchmarkHamt32Del"] = time.Since(StartTime["run BenchmarkHamt32Del"])
