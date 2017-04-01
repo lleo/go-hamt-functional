@@ -16,12 +16,15 @@ import (
 	"github.com/pkg/errors"
 )
 
-//var numHugeKvs int = 1024
-var numHugeKvs int = 2 * 1024 * 1024
-var hugeKvs []key.KeyVal
+//var numKvs = 32
+//var numKvs int = 1024
+//var numKvs int = 2 * 1024 * 1024
+//var numKvs int = (3 * 1024 * 1024) + (4 * 1024) // between 3m+2k & 3m+4k
+var numKvs int = 512 * 1024
 
-var LookupHamt32 hamt32.Hamt
-var DeleteHamt32 hamt32.Hamt
+var KVS []key.KeyVal
+
+var TestHamt32 hamt32.Hamt
 
 var StartTime = make(map[string]time.Time)
 var RunTime = make(map[string]time.Duration)
@@ -69,7 +72,7 @@ func TestMain(m *testing.M) {
 
 	log.Println("TestMain: and so it begins...")
 
-	hugeKvs = buildKeyVals(numHugeKvs)
+	KVS = buildKeyVals(numKvs)
 
 	// execute
 	var xit int
@@ -144,24 +147,18 @@ func RunTimes() string {
 func initialize() {
 	var funcName = "hamt32: initialize()"
 
-	var metricName = funcName + ": build Lookup/Delete Hamt32"
+	var metricName = funcName + ": build TestHamt32"
 	log.Println(metricName, "called.")
 	log.Printf("initialize: GradeTables=%t; FullTableInit=%t\n", hamt32.GradeTables, hamt32.FullTableInit)
 	StartTime[metricName] = time.Now()
 
-	LookupHamt32 = hamt32.Hamt{}
-	DeleteHamt32 = hamt32.Hamt{}
+	TestHamt32 = hamt32.Hamt{}
 
-	for _, kv := range genRandomizedKvs(hugeKvs) {
+	for _, kv := range genRandomizedKvs(KVS) {
 		var inserted bool
-		LookupHamt32, inserted = LookupHamt32.Put(kv.Key, kv.Val)
+		TestHamt32, inserted = TestHamt32.Put(kv.Key, kv.Val)
 		if !inserted {
-			log.Fatalf("failed to LookupHamt32.Put(%s, %v)", kv.Key, kv.Val)
-		}
-
-		DeleteHamt32, inserted = DeleteHamt32.Put(kv.Key, kv.Val)
-		if !inserted {
-			log.Fatalf("failed to DeleteHamt32.Put(%s, %v)", kv.Key, kv.Val)
+			log.Fatalf("failed to TestHamt32.Put(%s, %v)", kv.Key, kv.Val)
 		}
 	}
 
