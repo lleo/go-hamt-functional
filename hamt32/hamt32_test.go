@@ -16,17 +16,19 @@ func TestBuildHamt32(t *testing.T) {
 	var h = hamt32.Hamt{}
 
 	var added bool
-	for _, kv := range hugeKvs {
+	for _, kv := range KVS {
 		h, added = h.Put(kv.Key, kv.Val)
 		if !added {
 			t.Fatalf("failed to h.Put(%s, %v)", kv.Key, kv.Val)
 		}
 	}
+
 	//log.Println(h.LongString(""))
 
 	var val interface{}
 	var removed bool
-	for _, kv := range hugeKvs {
+	for _, kv := range KVS {
+		//log.Printf("kv.Key = %s", kv.Key)
 		h, val, removed = h.Del(kv.Key)
 		if !removed {
 			t.Fatalf("failed to h.Del(%s)", kv.Key)
@@ -36,7 +38,7 @@ func TestBuildHamt32(t *testing.T) {
 		}
 	}
 
-	log.Printf("h = %s", h.LongString(""))
+	//log.Printf("h = %s", h.LongString(""))
 
 	if !h.IsEmpty() {
 		t.Fatalf("!h.IsEmpty()")
@@ -47,15 +49,16 @@ func BenchmarkHamt32Get(b *testing.B) {
 	log.Printf("BenchmarkHamt32Get: b.N=%d", b.N)
 
 	for i := 0; i < b.N; i++ {
-		var j = int(rand.Int31()) % numHugeKvs
-		var key = hugeKvs[j].Key
-		var val = hugeKvs[j].Val
-		var v, found = LookupHamt32.Get(key)
+		//var j = int(rand.Int31()) % numKvs
+		var j = rand.Int() % numKvs
+		var key = KVS[j].Key
+		var val = KVS[j].Val
+		var v, found = TestHamt32.Get(key)
 		if !found {
 			b.Fatalf("H.Get(%s) not found", key)
 		}
 		if v != val {
-			b.Fatalf("val,%v != hugeKvs[%d].val,%v", v, j, val)
+			b.Fatalf("val,%v != KVS[%d].val,%v", v, j, val)
 		}
 	}
 }
@@ -76,21 +79,15 @@ func BenchmarkHamt32Put(b *testing.B) {
 func BenchmarkHamt32Del(b *testing.B) {
 	log.Printf("BenchmarkHamt32Del: b.N=%d", b.N)
 
-	// We rebuild the DeleteHamt32 datastructure because this Benchmark will probably be
-	// rereun with different b.N values to get a better/more-accurate benchmark.
+	var h = TestHamt32
 
-	StartTime["BenchmarkHamt32Del:rebuildDeleteHamt32"] = time.Now()
-
-	//rebuildDeleteHamt32(hugeKvs)
-	var h = DeleteHamt32 //its functional and I am an idiot
-
-	RunTime["BenchmarkHamt32Del:rebuildDeleteHamt"] = time.Since(StartTime["BenchmarkHamt32Del:rebuildDeleteHamt32"])
+	var randomizedKVS = genRandomizedKvs(KVS)
 
 	b.ResetTimer()
 
 	StartTime["run BenchmarkHamt32Del"] = time.Now()
 	for i := 0; i < b.N; i++ {
-		kv := hugeKvs[i]
+		kv := randomizedKVS[i%numKvs]
 		key := kv.Key
 		val := kv.Val
 
@@ -106,7 +103,7 @@ func BenchmarkHamt32Del(b *testing.B) {
 	}
 
 	if h.IsEmpty() {
-		b.Fatal("DeleteHamt32.IsEmpty() => true; hence this wasn't a valid benchmark")
+		b.Fatal("TestHamt32.IsEmpty() => true; hence this wasn't a valid benchmark")
 	}
 
 	RunTime["run BenchmarkHamt32Del"] = time.Since(StartTime["run BenchmarkHamt32Del"])
