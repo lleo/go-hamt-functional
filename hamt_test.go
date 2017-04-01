@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/lleo/go-hamt-functional/hamt32"
-	"github.com/lleo/go-hamt-functional/hamt64"
 	"github.com/lleo/go-hamt/key"
 	"github.com/lleo/go-hamt/stringkey"
 	"github.com/pkg/errors"
@@ -23,49 +22,66 @@ type StrVal struct {
 	Val int
 }
 
-var numKvs int = 2 * 1024 * 1024
+//var numKvs int = 512 * 1024
+//var numKvs int = 1 * 1024 * 1024
+//var numKvs int = 2 * 1024 * 1024
+//var numKvs int = 3 * 1024 * 1024
+var numKvs int = (3 * 1024 * 1024) + (4 * 1024) // between 3m+2k & 3m+4k
 
 var KVS []key.KeyVal
 var SVS []StrVal
 
-var LookupMap = make(map[string]int, numKvs)
-var DeleteMap = make(map[string]int, numKvs)
+var LookupMap map[string]int
+var DeleteMap map[string]int
 
 var LookupHamt32 hamt32.Hamt
 var DeleteHamt32 hamt32.Hamt
 
-var LookupHamt64 hamt64.Hamt
-var DeleteHamt64 hamt64.Hamt
+//var LookupHamt64 hamt64.Hamt
+//var DeleteHamt64 hamt64.Hamt
 
 var Inc = stringutil.Lower.Inc
 
 var StartTime = make(map[string]time.Time)
 var RunTime = make(map[string]time.Duration)
 
+const (
+	hybrid   = 0
+	fullonly = 1
+	componly = 2
+)
+
+var cfgStr = []string{"hybrid", "fullonly", "componly"}
+var cfgMap = map[string]int{"hybrid": hybrid, "fullonly": fullonly, "componly": componly}
+
+var TYP int
+var CFG string
+
 func TestMain(m *testing.M) {
-	var fullonly, componly, hybrid, all bool
-	flag.BoolVar(&fullonly, "F", false, "Use full tables only and exclude C and H Options.")
-	flag.BoolVar(&componly, "C", false, "Use compressed tables only and exclude F and Hpppppppp Options.")
-	flag.BoolVar(&hybrid, "H", false, "Use compressed tables initially and exclude F and C Options.")
-	flag.BoolVar(&all, "A", false, "Run all Tests w/ Options set to hamt32.FullTablesOnly, hamt32.CompTablesOnly, and hamt32.HybridTables; in that order.")
+	var fullonlyOpt, componlyOpt, hybridOpt, allOpt bool
+	flag.BoolVar(&fullonlyOpt, "F", false, "Use full tables only and exclude C and H Options.")
+	flag.BoolVar(&componlyOpt, "C", false, "Use compressed tables only and exclude F and H Options.")
+	flag.BoolVar(&hybridOpt, "H", false, "Use compressed tables initially and exclude F and C Options.")
+	flag.BoolVar(&allOpt, "A", false, "Run all Tests w/ Options set to hamt32.FullTablesOnly, hamt32.CompTablesOnly, and hamt32.HybridTables; in that order.")
 
 	flag.Parse()
 
-	// If all flag set, ignore fullonly, componly, and hybrid.
-	if !all {
+	// If allOpt flag set, ignore fullonlyOpt, componlyOpt, and hybridOpt.
+	if !allOpt {
 
-		// only one flag may be set between fullonly, componly, and hybrid
-		if (fullonly && (componly || hybrid)) ||
-			(componly && (fullonly || hybrid)) ||
-			(hybrid && (componly || fullonly)) {
+		// only one flag may be set between fullonlyOpt, componlyOpt, and hybridOpt
+		if (fullonlyOpt && (componlyOpt || hybridOpt)) ||
+			(componlyOpt && (fullonlyOpt || hybridOpt)) ||
+			(hybridOpt && (componlyOpt || fullonlyOpt)) {
 			flag.PrintDefaults()
 			os.Exit(1)
 		}
 	}
 
 	// If no flags given, run all tests.
-	if !(all || fullonly || componly || hybrid) {
-		all = true
+	if !(allOpt || fullonlyOpt || componlyOpt || hybridOpt) {
+		allOpt = true
+		//fullonlyOpt = true
 	}
 
 	log.SetFlags(log.Lshortfile)
@@ -83,76 +99,70 @@ func TestMain(m *testing.M) {
 
 	KVS, SVS = buildKeyVals(numKvs)
 
-	//Build LookupMap & DeleteMap
-	for i, sv := range SVS {
-		var s = sv.Str
-		LookupMap[s] = i
-		DeleteMap[s] = i
-	}
+	LookupMap, DeleteMap = buildMaps(numKvs)
 
 	// execute
 	var xit int
 
-	if all {
-		//Full Tables Only
-		hamt32.GradeTables = false
-		hamt32.FullTableInit = true
-		hamt64.GradeTables = false
-		hamt64.FullTableInit = true
-		log.Println("TestMain: Full Tables Only")
-		log.Printf("TestMain: GradeTables=%t; FullTableInit=%t\n", hamt32.GradeTables, hamt32.FullTableInit)
-		initialize()
-		xit = m.Run()
-		if xit != 0 {
-			os.Exit(xit)
-		}
+	if allOpt {
+		//for _, TYP = range []int{fullonly, componly, hybrid} {
+		for _, TYP = range []int{hybrid, componly, fullonly} {
+			CFG = cfgStr[TYP]
+			var name = "all tests: " + CFG
+			StartTime[name] = time.Now()
 
-		//Compressed Tables Only
-		hamt32.GradeTables = false
-		hamt32.FullTableInit = false
-		hamt64.GradeTables = false
-		hamt64.FullTableInit = false
-		log.Println("TestMain: Compressed Tables Only")
-		log.Printf("TestMain: GradeTables=%t; FullTableInit=%t\n", hamt32.GradeTables, hamt32.FullTableInit)
-		initialize()
-		xit = m.Run()
-		if xit != 0 {
-			os.Exit(xit)
-		}
+			log.Printf("allOpt: for type = %s\n", CFG)
 
-		//Hybrid Tables
-		hamt32.GradeTables = true
-		hamt32.FullTableInit = false
-		hamt64.GradeTables = true
-		hamt64.FullTableInit = false
-		log.Println("TestMain: Hybrid Tables")
-		log.Printf("TestMain: GradeTables=%t; FullTableInit=%t\n", hamt32.GradeTables, hamt32.FullTableInit)
-		initialize()
-		xit = m.Run()
+			LookupHamt32 = createHamt32("LookupHamt32", TYP)
+			//DeleteHamt32 = createHamt32("DeleteHamt32", TYP)
+
+			log.Println(LookupHamt32.LongString(""))
+
+			fmt.Println("Running all tests:", CFG)
+			xit = m.Run()
+			if xit != 0 {
+				os.Exit(xit)
+			}
+
+			RunTime[name] = time.Since(StartTime[name])
+			fmt.Printf("RunTime[%q] = %v\n", name, RunTime[name])
+		}
 	} else {
-		if hybrid {
-			hamt32.GradeTables = true
-			hamt32.FullTableInit = false
-			hamt64.GradeTables = true
-			hamt64.FullTableInit = false
-			log.Println("TestMain: Hybrid Tables")
-		} else if fullonly {
-			hamt32.GradeTables = false
-			hamt32.FullTableInit = true
-			hamt64.GradeTables = false
-			hamt64.FullTableInit = true
-			log.Println("TestMain: Full Tables Only")
-		} else /* if componly */ {
-			hamt32.GradeTables = false
-			hamt32.FullTableInit = false
-			hamt64.GradeTables = false
-			hamt64.FullTableInit = false
-			log.Println("TestMain: Compressed Tables Only")
+		var msg string
+		var name string
+		if hybridOpt {
+			TYP = hybrid
+			CFG = cfgStr[TYP]
+			msg = fmt.Sprintf("hybridOpt: for type = %s", CFG)
+			name = "one test: " + CFG
+		} else if fullonlyOpt {
+			TYP = fullonly
+			CFG = cfgStr[TYP]
+			msg = fmt.Sprintf("fullonlyOpt: for type = %s", CFG)
+			name = "one test: " + CFG
+		} else /* if componlyOpt */ {
+			TYP = componly
+			CFG = cfgStr[TYP]
+			msg = fmt.Sprintf("componlyOpt: for type = %s", CFG)
+			name = "one test: " + CFG
 		}
 
+		StartTime[name] = time.Now()
+
+		setLibrary(TYP)
+
+		log.Println(msg)
+		fmt.Println(msg)
+
 		log.Printf("TestMain: GradeTables=%t; FullTableInit=%t\n", hamt32.GradeTables, hamt32.FullTableInit)
-		initialize()
+
+		LookupHamt32 = createHamt32("LookupHamt32", TYP)
+		//DeleteHamt32 = createHamt32("DeleteHamt32", TYP)
+
 		xit = m.Run()
+
+		RunTime[name] = time.Since(StartTime[name])
+		fmt.Printf("RunTime[%q] = %v\n", name, RunTime[name])
 	}
 
 	log.Println("\n", RunTimes())
@@ -177,44 +187,69 @@ func RunTimes() string {
 
 var initializeNum int
 
-func initialize() {
-	var name = fmt.Sprintf("initialize-%d", initializeNum)
-	initializeNum++
+func setLibrary(typ int) {
+	switch typ {
+	case hybrid:
+		hamt32.GradeTables = true
+		hamt32.FullTableInit = false
+		//hamt64.GradeTables = true
+		//hamt64.FullTableInit = false
+	case fullonly:
+		hamt32.GradeTables = false
+		hamt32.FullTableInit = true
+		//hamt64.GradeTables = false
+		//hamt64.FullTableInit = true
+	case componly:
+		hamt32.GradeTables = false
+		hamt32.FullTableInit = false
+		//hamt64.GradeTables = false
+		//hamt64.FullTableInit = false
+	default:
+		panic(fmt.Sprintf("unknown type %d", typ))
+	}
+}
+
+func createHamt32(hname string, typ int) hamt32.Hamt {
+	var name = "createHamt32:" + hname + ":" + cfgStr[typ]
+	setLibrary(typ)
 	StartTime[name] = time.Now()
 
-	log.Printf("%s: GradeTables=%t; FullTableInit=%t\n", name, hamt32.GradeTables, hamt32.FullTableInit)
-
-	LookupHamt32 = hamt32.Hamt{}
-	DeleteHamt32 = hamt32.Hamt{}
-
-	LookupHamt64 = hamt64.Hamt{}
-	DeleteHamt64 = hamt64.Hamt{}
+	var h = hamt32.Hamt{}
 
 	for _, kv := range KVS {
 		var inserted bool
-
-		LookupHamt32, inserted = LookupHamt32.Put(kv.Key, kv.Val)
+		h, inserted = h.Put(kv.Key, kv.Val)
 		if !inserted {
-			log.Fatalf("failed to LookupHamt32.Put(%s, %v)", kv.Key, kv.Val)
-		}
-
-		DeleteHamt32, inserted = DeleteHamt32.Put(kv.Key, kv.Val)
-		if !inserted {
-			log.Fatalf("failed to DeleteHamt32.Put(%s, %v)", kv.Key, kv.Val)
-		}
-
-		LookupHamt64, inserted = LookupHamt64.Put(kv.Key, kv.Val)
-		if !inserted {
-			log.Fatalf("failed to LookupHamt64.Put(%s, %v)", kv.Key, kv.Val)
-		}
-
-		DeleteHamt64, inserted = DeleteHamt64.Put(kv.Key, kv.Val)
-		if !inserted {
-			log.Fatalf("failed to DeleteHamt64.Put(%s, %v)", kv.Key, kv.Val)
+			log.Fatalf("failed to %s.Put(%s, %v)", hname, kv.Key, kv.Val)
 		}
 	}
 
 	RunTime[name] = time.Since(StartTime[name])
+
+	return h
+}
+
+func buildMaps(num int) (lup map[string]int, del map[string]int) {
+	var name = "build LookupMap & DeleteMap"
+	StartTime[name] = time.Now()
+
+	lup = make(map[string]int, num)
+	del = make(map[string]int, num)
+
+	var s = "aaa"
+	var v int = 0
+
+	for i := 0; i < num; i++ {
+		lup[s] = v
+		del[s] = v
+
+		s = Inc(s)
+		v++
+	}
+
+	RunTime[name] = time.Since(StartTime[name])
+
+	return
 }
 
 func buildKeyVals(num int) ([]key.KeyVal, []StrVal) {
@@ -285,6 +320,12 @@ func genRandomizedSvs(svs []StrVal) []StrVal {
 func BenchmarkMapGet(b *testing.B) {
 	var name = "BenchmarkMapGet"
 	log.Printf("%s b.N=%d\n", name, b.N)
+
+	var _, ok = LookupMap["aaa"]
+	if !ok {
+		LookupMap, DeleteMap = buildMaps(numKvs)
+	}
+
 	StartTime[name] = time.Now()
 
 	b.ResetTimer()
@@ -295,10 +336,10 @@ func BenchmarkMapGet(b *testing.B) {
 		var v = SVS[j].Val
 		var val, ok = LookupMap[s]
 		if !ok {
-			b.Fatalf("LookupMap[%s] does not exist", s)
+			b.Fatalf("LookupMap[%q] does not exist", s)
 		}
 		if val != v {
-			b.Fatalf("LookupMap[%s] != %d", s, KVS[j].Val)
+			b.Fatalf("LookupMap[%q] != %d", s, KVS[j].Val)
 		}
 	}
 
@@ -328,6 +369,7 @@ var rebuildDeleteMapNum int
 func rebuildDeleteMap(svs []StrVal) {
 	var name = fmt.Sprintf("BenchmarkMapPut-%d", rebuildDeleteMapNum)
 	rebuildDeleteMapNum++
+
 	StartTime[name] = time.Now()
 
 	for _, sv := range svs {

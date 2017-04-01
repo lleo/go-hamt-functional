@@ -11,40 +11,153 @@ import (
 	"github.com/lleo/stringutil"
 )
 
+func TestPutOne(t *testing.T) {
+	var h = hamt32.Hamt{}
+	var k = stringkey.New("aaa")
+	var v = 1
+	var inserted bool
+
+	h, inserted = h.Put(k, v)
+	if !inserted {
+		t.Fatalf("failed to h.Put(%q, %v)", k.Str(), v)
+	}
+
+	//log.Printf("TestPutOne: h =\n%s", h.LongString(""))
+}
+
+// Used progs/findCollisionDepth0.go to find collison at depth 0 for "aaa".
+// s = aaa; H30 = /01/28/12/24/09/03;
+// s = abh; H30 = /01/26/11/24/25/01;
+func TestCollisionCreatesTable(t *testing.T) {
+	var h = hamt32.Hamt{}
+	var k0 = stringkey.New("aaa")
+	var k1 = stringkey.New("abh")
+
+	var inserted bool
+	h, inserted = h.Put(k0, 0)
+	if !inserted {
+		t.Fatalf("failed to insert %s\n", k0)
+	}
+
+	h, inserted = h.Put(k1, 1)
+	if !inserted {
+		t.Fatalf("failed to insert %s\n", k1)
+	}
+
+}
+
+func TestHash30Collision(t *testing.T) {
+	var name = "TestMaxDepthCollision"
+
+	var s30 = "/00/28/10/00/26/13"
+	var h30 = hamt32.StringToH30(s30)
+
+	var k0 = stringkey.New("ewwd") // val=103327,  H30=/00/28/10/00/26/13
+	var v0 = 103327
+
+	var k1 = stringkey.New("fwdyy") // val=3148780, H30=/00/28/10/00/26/13
+	var v1 = 3148780
+
+	var h hamt32.Hamt
+	var added bool
+
+	h, added = h.Put(k0, v0)
+	if !added {
+		t.Fatalf("Failed to Put(%s, %d)\n", k0, v0)
+	}
+	h, added = h.Put(k1, v1)
+	if !added {
+		t.Fatalf("Failed to Put(%s, %d)\n", k1, v1)
+	}
+
+	log.Printf("%s: h30=%#x h=\n%s", name, h30, h.LongString(""))
+}
+
 func TestBuildHamt32(t *testing.T) {
-	log.Println("TestBuildHamt32:")
+	var name = "TestBuildHamt32:" + CFG
+	StartTime[name] = time.Now()
+
 	var h = hamt32.Hamt{}
 
-	var added bool
 	for _, kv := range KVS {
-		h, added = h.Put(kv.Key, kv.Val)
-		if !added {
-			t.Fatalf("failed to h.Put(%s, %v)", kv.Key, kv.Val)
+		var k = kv.Key
+		var v = kv.Val
+
+		var inserted bool
+		h, inserted = h.Put(k, v)
+		if !inserted {
+			t.Fatalf("failed to put k=%s\n", k)
 		}
 	}
-	//log.Println(h.LongString(""))
 
-	var val interface{}
-	var removed bool
+	if h.Nentries() != uint(len(KVS)) {
+		t.Fatalf("h.entries,%d != len(KVS),%d", h.Nentries(), len(KVS))
+	}
+
+	RunTime[name] = time.Since(StartTime[name])
+}
+
+func TestLookupAll(t *testing.T) {
+	var name = "TestLookupAll:" + CFG
+
+	//StartTime[name+"-full"] = time.Now()
+	//
+	//var _, f = LookupHamt32.Get(stringkey.New("aaa"))
+	//if !f {
+	//	LookupHamt32 = createHamt32("LookupAll:LookupHamt32", TYP)
+	//}
+
+	StartTime[name] = time.Now()
+
 	for _, kv := range KVS {
-		h, val, removed = h.Del(kv.Key)
-		if !removed {
-			t.Fatalf("failed to h.Del(%s)", kv.Key)
+		var k = kv.Key
+		var v = kv.Val
+
+		var val, found = LookupHamt32.Get(k)
+		if !found {
+			t.Fatalf("Failed to LookupHamt32.Get(k): k=%s\n", k)
 		}
-		if val != kv.Val {
-			t.Fatalf("val,%d != kv.Val,%d", val, kv.Val)
+		if val != v {
+			t.Fatalf("Found value not equal to expected value: v,%d != val,%d\n", k, val)
 		}
 	}
 
-	//log.Printf("h = %s", h.LongString(""))
+	RunTime[name] = time.Since(StartTime[name])
+	//RunTime[name+"-full"] = time.Since(StartTime[name+"-full"])
+}
 
-	if !h.IsEmpty() {
-		t.Fatalf("!h.IsEmpty()")
+func TestDeleteAll(t *testing.T) {
+	var name = "TestDeleteAll" + CFG
+
+	StartTime[name] = time.Now()
+	var h = LookupHamt32
+
+	for _, kv := range KVS {
+		var k = kv.Key
+		var v = kv.Val
+
+		var val interface{}
+		var deleted bool
+		h, val, deleted = h.Del(k)
+		if !deleted {
+			t.Fatal("Failed to delete k=%s", k)
+		}
+		if val != v {
+			t.Fatal("For k=%s, returned val,%d != stored v,%d", k, val, v)
+		}
 	}
+
+	RunTime[name] = time.Since(StartTime[name])
 }
 
 func BenchmarkHamt32Get(b *testing.B) {
 	log.Printf("BenchmarkHamt32Get: b.N=%d", b.N)
+
+	//var _, f = LookupHamt32.Get(stringkey.New("aaa"))
+	//if !f {
+	//	LookupHamt32 = createHamt32("LookupHamt32", TYP)
+	//	b.ResetTimer()
+	//}
 
 	for i := 0; i < b.N; i++ {
 		var j = int(rand.Int31()) % numKvs
@@ -76,13 +189,12 @@ func BenchmarkHamt32Put(b *testing.B) {
 func BenchmarkHamt32Del(b *testing.B) {
 	log.Printf("BenchmarkHamt32Del: b.N=%d", b.N)
 
-	// We rebuild the DeleteHamt32 datastructure because this Benchmark will probably be
-	// rereun with different b.N values to get a better/more-accurate benchmark.
-
 	StartTime["BenchmarkHamt32Del:rebuildDeleteHamt32"] = time.Now()
 
-	//rebuildDeleteHamt32(KVS)
-	var h = DeleteHamt32 //its functional and I am an idiot
+	DeleteHamt32 = createHamt32("DeleteHamt32", TYP)
+	b.ResetTimer()
+
+	var h = DeleteHamt32
 
 	RunTime["BenchmarkHamt32Del:rebuildDeleteHamt"] = time.Since(StartTime["BenchmarkHamt32Del:rebuildDeleteHamt32"])
 
