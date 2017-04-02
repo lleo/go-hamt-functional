@@ -23,14 +23,14 @@ import (
 	"github.com/pkg/errors"
 )
 
-// Nbits constant is the number of bits(5) a 60bit hash value is split into,
+// Nbits constant is the number of bits(6) a 60bit hash value is split into,
 // to provied the indexes of a HAMT.
-const Nbits uint = 5
+const Nbits uint = 6
 
 // MaxDepth constant is the maximum depth(5) of Nbits values that constitute
 // the path in a HAMT, from [0..MaxDepth]for a total of MaxDepth+1(6) levels.
-// Nbits*(MaxDepth+1) == HASHBITS (ie 5*(5+1) == 60).
-const MaxDepth uint = 5
+// Nbits*(MaxDepth+1) == HASHBITS (ie 6*(9+1) == 60).
+const MaxDepth uint = 9
 
 // TableCapacity constant is the number of table entries in a each node of
 // a HAMT datastructure; its value is 1<<Nbits (ie 2^5 == 64).
