@@ -84,17 +84,17 @@ func StringToH30(s string) uint32 {
 	return h30
 }
 
-// h30ToBitStr is for printf debugging use
-func h30ToBitStr(h30 uint32) string {
-	var strs = make([]string, MaxDepth+1)
-
-	for depth := uint(0); depth <= MaxDepth; depth++ {
-		var idx = index(h30, depth)
-		strs[MaxDepth-depth] = fmt.Sprintf("%05b", idx)
-	}
-
-	return strings.Join(strs, " ")
-}
+//// h30ToBitStr is for printf debugging use
+//func h30ToBitStr(h30 uint32) string {
+//	var strs = make([]string, MaxDepth+1)
+//
+//	for depth := uint(0); depth <= MaxDepth; depth++ {
+//		var idx = index(h30, depth)
+//		strs[MaxDepth-depth] = fmt.Sprintf("%05b", idx)
+//	}
+//
+//	return strings.Join(strs, " ")
+//}
 
 //indexMask() generates a Nbits(5-bit) mask for a given depth
 func indexMask(depth uint) uint32 {
