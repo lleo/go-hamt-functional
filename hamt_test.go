@@ -6,6 +6,7 @@ import (
 	"log"
 	"math/rand"
 	"os"
+	"sort"
 	"testing"
 	"time"
 
@@ -18,23 +19,19 @@ import (
 	"github.com/lleo/stringutil"
 )
 
-type StrVal struct {
-	Str string
-	Val int
-}
-
-//var numKvs int = 512 * 1024
-//var numKvs int = 1 * 1024 * 1024
-//var numKvs int = 2 * 1024 * 1024
-//var numKvs int = 3 * 1024 * 1024
+// In a Hamt32 with 3149824 entries, there is 32 collisionLeafs. The creation
+// of collisionLeafs happends after 3m+2k but before 3m+4k entries given my
+// string "aaa" stringutil.Lower.Inc() string incrementer test harness.
 var numKvs int = (3 * 1024 * 1024) + (4 * 1024) // between 3m+2k & 3m+4k
 
 var KVS []key.KeyVal
-var SVS []StrVal
 
-var LookupMap map[string]int
-var DeleteMap map[string]int
+//var SVS []StrVal
 
+// Global variables to be initialized & shared between tests.
+// These used to be initialized in main. This slowed down everything, even
+// if they weren't used. This was changed that they are initialized only
+// where they are needed and only if they are not already initialized.
 var TestHamt32 hamt32.Hamt
 var TestHamt64 hamt64.Hamt
 
@@ -95,9 +92,7 @@ func TestMain(m *testing.M) {
 	// SETUP
 	log.Println("TestMain: and so it begins...")
 
-	KVS, SVS = buildKeyVals(numKvs)
-
-	LookupMap, DeleteMap = buildMaps(numKvs)
+	KVS = buildKeyVals("global", numKvs, "aaa", 0)
 
 	// execute
 	var xit int
@@ -110,11 +105,6 @@ func TestMain(m *testing.M) {
 			StartTime[name] = time.Now()
 
 			log.Printf("allOpt: for type = %s\n", CFG)
-
-			TestHamt32 = createHamt32("TestHamt32", TYP)
-			TestHamt64 = createHamt64("TestHamt64", TYP)
-
-			log.Println(TestHamt32.LongString(""))
 
 			fmt.Println("Running all tests:", CFG)
 			xit = m.Run()
@@ -154,9 +144,6 @@ func TestMain(m *testing.M) {
 
 		log.Printf("TestMain: GradeTables=%t; FullTableInit=%t\n", hamt32.GradeTables, hamt32.FullTableInit)
 
-		TestHamt32 = createHamt32("TestHamt32", TYP)
-		TestHamt64 = createHamt64("TestHamt64", TYP)
-
 		xit = m.Run()
 
 		RunTime[name] = time.Since(StartTime[name])
@@ -171,14 +158,28 @@ func TestMain(m *testing.M) {
 	os.Exit(xit)
 }
 
+func keysMapStringDuration(m map[string]time.Duration) []string {
+	var ks = make([]string, len(m))
+	i := 0
+	for k := range m {
+		ks[i] = k
+		i++
+	}
+	return ks
+}
+
 func RunTimes() string {
+	var ks = keysMapStringDuration(RunTime)
+	sort.Strings(ks)
+
 	var s = ""
 
 	s += "Key                                                               Val\n"
 	s += "=================================================================+==========\n"
 
-	for key, val := range RunTime {
-		s += fmt.Sprintf("%-65s %s\n", key, val)
+	for _, k := range ks {
+		v := RunTime[k]
+		s += fmt.Sprintf("%-65s %s\n", k, v)
 	}
 	return s
 }
@@ -207,18 +208,18 @@ func setLibrary(typ int) {
 	}
 }
 
-func createHamt32(hname string, typ int) hamt32.Hamt {
-	var name = "createHamt32:" + hname + ":" + cfgStr[typ]
+func createHamt32(prefix string, kvs []key.KeyVal, typ int) hamt32.Hamt {
+	var name = fmt.Sprintf("%s++createHamt32:%s", prefix, cfgStr[typ])
 	setLibrary(typ)
 	StartTime[name] = time.Now()
 
 	var h = hamt32.Hamt{}
 
-	for _, kv := range KVS {
+	for _, kv := range kvs {
 		var inserted bool
 		h, inserted = h.Put(kv.Key, kv.Val)
 		if !inserted {
-			log.Fatalf("failed to %s.Put(%s, %v)", hname, kv.Key, kv.Val)
+			log.Fatalf("%s: failed to h.Put(%s, %v)", prefix, kv.Key, kv.Val)
 		}
 	}
 
@@ -227,18 +228,18 @@ func createHamt32(hname string, typ int) hamt32.Hamt {
 	return h
 }
 
-func createHamt64(hname string, typ int) hamt64.Hamt {
-	var name = "createHamt64:" + hname + ":" + cfgStr[typ]
+func createHamt64(prefix string, kvs []key.KeyVal, typ int) hamt64.Hamt {
+	var name = fmt.Sprintf("%s++createHamt64:%s", prefix, cfgStr[typ])
 	setLibrary(typ)
 	StartTime[name] = time.Now()
 
 	var h = hamt64.Hamt{}
 
-	for _, kv := range KVS {
+	for _, kv := range kvs {
 		var inserted bool
 		h, inserted = h.Put(kv.Key, kv.Val)
 		if !inserted {
-			log.Fatalf("failed to %s.Put(%s, %v)", hname, kv.Key, kv.Val)
+			log.Fatalf("%s: failed to Hamt64.Put(%s, %v)", prefix, kv.Key, kv.Val)
 		}
 	}
 
@@ -247,19 +248,19 @@ func createHamt64(hname string, typ int) hamt64.Hamt {
 	return h
 }
 
-func buildMaps(num int) (lup map[string]int, del map[string]int) {
-	var name = "build LookupMap & DeleteMap"
+func buildMap(prefix string, num int) (map[string]int, []string) {
+	var name = fmt.Sprintf("%s-buildMap-%d", prefix, num)
 	StartTime[name] = time.Now()
 
-	lup = make(map[string]int, num)
-	del = make(map[string]int, num)
+	var m = make(map[string]int, num)
+	var k = make([]string, num)
 
 	var s = "aaa"
 	var v int = 0
 
 	for i := 0; i < num; i++ {
-		lup[s] = v
-		del[s] = v
+		m[s] = v
+		k[i] = s
 
 		s = Inc(s)
 		v++
@@ -267,29 +268,48 @@ func buildMaps(num int) (lup map[string]int, del map[string]int) {
 
 	RunTime[name] = time.Since(StartTime[name])
 
-	return
+	return m, k
 }
 
-func buildKeyVals(num int) ([]key.KeyVal, []StrVal) {
-	var name = "buildKeyVals"
+//type StrVal struct {
+//	Str string
+//	Val interface{}
+//}
+//
+//func buildStrVals(prefix string, num int) []StrVal {
+//	var name = fmt.Sprintf("%s-buildMap-%d", prefix, num)
+//	StartTime[name] = time.Now()
+//
+//	var svs = make([]StrVal, num)
+//	var s = "aaa"
+//
+//	for i := 0; i < num; i++ {
+//		svs[s] = i
+//
+//		s = Inc(s)
+//	}
+//
+//	RunTime[name] = time.Since(StartTime[name])
+//	return svs
+//}
+
+func buildKeyVals(prefix string, num int, initStr string, initVal int) []key.KeyVal {
+	var name = fmt.Sprintf("%s++buildKeyVals#%d", prefix, num)
 	StartTime[name] = time.Now()
 
-	var kvs = make([]key.KeyVal, num, num)
-	var svs = make([]StrVal, num, num)
+	var kvs = make([]key.KeyVal, num)
+	var s = initStr
 
-	s := "aaa"
-	for i := 0; i < num; i++ {
-		kvs[i].Key = stringkey.New(s)
-		kvs[i].Val = i
+	var limit = initVal + num
+	for i := initVal; i < limit; i++ {
+		var k = stringkey.New(s)
 
-		svs[i].Str = s
-		svs[i].Val = i
-
+		kvs[i] = key.KeyVal{k, i}
 		s = Inc(s)
 	}
 
 	RunTime[name] = time.Since(StartTime[name])
-	return kvs, svs
+	return kvs
 }
 
 //First genRandomizedSvs() copies []KeyVal passed in. Then it randomizes that
@@ -315,118 +335,118 @@ func genRandomizedKvs(kvs []key.KeyVal) []key.KeyVal {
 	return randKvs
 }
 
-//First genRandomizedSvs() copies []StrVal passed in. Then it randomizes that
-//copy in-place. Finnally, it returns the randomized copy.
-func genRandomizedSvs(svs []StrVal) []StrVal {
-	var name = "genRandomizedSvs"
-	StartTime[name] = time.Now()
+////First genRandomizedSvs() copies []StrVal passed in. Then it randomizes that
+////copy in-place. Finnally, it returns the randomized copy.
+//func genRandomizedSvs(svs []StrVal) []StrVal {
+//	var name = "genRandomizedSvs"
+//	StartTime[name] = time.Now()
+//
+//	var randSvs = make([]StrVal, len(svs))
+//	copy(randSvs, svs)
+//
+//	//From: https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle#The_modern_algorithm
+//	var limit = len(randSvs) //n-1
+//	for i := 0; i < limit; /* aka i_max = n-2 */ i++ {
+//		j := rand.Intn(i+1) - 1 // i <= j < n; j_min=n-(n-2+1)-1=0; j_max=n-0-1=n-1
+//		randSvs[i], randSvs[j] = randSvs[j], randSvs[i]
+//	}
+//
+//	RunTime[name] = time.Since(StartTime[name])
+//	return randSvs
+//}
 
-	var randSvs = make([]StrVal, len(svs))
-	copy(randSvs, svs)
-
-	//From: https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle#The_modern_algorithm
-	var limit = len(randSvs) //n-1
-	for i := 0; i < limit; /* aka i_max = n-2 */ i++ {
-		j := rand.Intn(i+1) - 1 // i <= j < n; j_min=n-(n-2+1)-1=0; j_max=n-0-1=n-1
-		randSvs[i], randSvs[j] = randSvs[j], randSvs[i]
-	}
-
-	RunTime[name] = time.Since(StartTime[name])
-	return randSvs
-}
-
-func BenchmarkMapGet(b *testing.B) {
-	var name = "BenchmarkMapGet"
-	log.Printf("%s b.N=%d\n", name, b.N)
-
-	var _, ok = LookupMap["aaa"]
-	if !ok {
-		LookupMap, DeleteMap = buildMaps(numKvs)
-	}
-
-	StartTime[name] = time.Now()
-
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
-		var j = i % numKvs
-		var s = SVS[j].Str
-		var v = SVS[j].Val
-		var val, ok = LookupMap[s]
-		if !ok {
-			b.Fatalf("LookupMap[%q] does not exist", s)
-		}
-		if val != v {
-			b.Fatalf("LookupMap[%q] != %d", s, KVS[j].Val)
-		}
-	}
-
-	RunTime[name] = time.Since(StartTime[name])
-}
-
-func BenchmarkMapPut(b *testing.B) {
-	var name = "BenchmarkMapPut"
-	log.Printf("%s b.N=%d\n", name, b.N)
-	StartTime[name] = time.Now()
-	var m = make(map[string]int)
-
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
-		var j = i % numKvs
-		var s = SVS[j].Str
-		var v = SVS[j].Val
-		m[s] = v
-	}
-
-	RunTime[name] = time.Since(StartTime[name])
-}
-
-var rebuildDeleteMapNum int
-
-func rebuildDeleteMap(svs []StrVal) {
-	var name = fmt.Sprintf("BenchmarkMapPut-%d", rebuildDeleteMapNum)
-	rebuildDeleteMapNum++
-
-	StartTime[name] = time.Now()
-
-	for _, sv := range svs {
-		var _, ok = DeleteMap[sv.Str]
-		if ok {
-			break
-		}
-		//else
-		delete(DeleteMap, sv.Str)
-
-		DeleteMap[sv.Str] = sv.Val
-	}
-
-	RunTime[name] = time.Since(StartTime[name])
-}
-
-func BenchmarkMapDel(b *testing.B) {
-	var name = "BenchmarkMapDel"
-	log.Printf("%s b.N=%d\n", name, b.N)
-	StartTime[name] = time.Now()
-	rebuildDeleteMap(SVS)
-	RunTime[name] = time.Since(StartTime[name])
-
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
-		var j = i % numKvs
-		var k = SVS[j].Str
-		var v = SVS[j].Val
-
-		var val, ok = DeleteMap[k]
-		if ok {
-			delete(DeleteMap, k)
-		} else if val != v {
-			b.Fatalf("DeleteMap[%s],%d != %d", k, v, val)
-		}
-
-		//b.StopTimer()
-		DeleteMap[k] = v
-		//b.StartTimer()
-	}
-}
+//func BenchmarkMapGet(b *testing.B) {
+//	var name = "BenchmarkMapGet"
+//	log.Printf("%s b.N=%d\n", name, b.N)
+//
+//	var _, ok = LookupMap["aaa"]
+//	if !ok {
+//		LookupMap, DeleteMap = buildMaps(numKvs)
+//	}
+//
+//	StartTime[name] = time.Now()
+//
+//	b.ResetTimer()
+//
+//	for i := 0; i < b.N; i++ {
+//		var j = i % numKvs
+//		var s = SVS[j].Str
+//		var v = SVS[j].Val
+//		var val, ok = LookupMap[s]
+//		if !ok {
+//			b.Fatalf("LookupMap[%q] does not exist", s)
+//		}
+//		if val != v {
+//			b.Fatalf("LookupMap[%q] != %d", s, KVS[j].Val)
+//		}
+//	}
+//
+//	RunTime[name] = time.Since(StartTime[name])
+//}
+//
+//func BenchmarkMapPut(b *testing.B) {
+//	var name = "BenchmarkMapPut"
+//	log.Printf("%s b.N=%d\n", name, b.N)
+//	StartTime[name] = time.Now()
+//	var m = make(map[string]int)
+//
+//	b.ResetTimer()
+//
+//	for i := 0; i < b.N; i++ {
+//		var j = i % numKvs
+//		var s = SVS[j].Str
+//		var v = SVS[j].Val
+//		m[s] = v
+//	}
+//
+//	RunTime[name] = time.Since(StartTime[name])
+//}
+//
+//var rebuildDeleteMapNum int
+//
+//func rebuildDeleteMap(svs []StrVal) {
+//	var name = fmt.Sprintf("BenchmarkMapPut-%d", rebuildDeleteMapNum)
+//	rebuildDeleteMapNum++
+//
+//	StartTime[name] = time.Now()
+//
+//	for _, sv := range svs {
+//		var _, ok = DeleteMap[sv.Str]
+//		if ok {
+//			break
+//		}
+//		//else
+//		delete(DeleteMap, sv.Str)
+//
+//		DeleteMap[sv.Str] = sv.Val
+//	}
+//
+//	RunTime[name] = time.Since(StartTime[name])
+//}
+//
+//func BenchmarkMapDel(b *testing.B) {
+//	var name = "BenchmarkMapDel"
+//	log.Printf("%s b.N=%d\n", name, b.N)
+//	StartTime[name] = time.Now()
+//	rebuildDeleteMap(SVS)
+//	RunTime[name] = time.Since(StartTime[name])
+//
+//	b.ResetTimer()
+//
+//	for i := 0; i < b.N; i++ {
+//		var j = i % numKvs
+//		var k = SVS[j].Str
+//		var v = SVS[j].Val
+//
+//		var val, ok = DeleteMap[k]
+//		if ok {
+//			delete(DeleteMap, k)
+//		} else if val != v {
+//			b.Fatalf("DeleteMap[%s],%d != %d", k, v, val)
+//		}
+//
+//		//b.StopTimer()
+//		DeleteMap[k] = v
+//		//b.StartTimer()
+//	}
+//}

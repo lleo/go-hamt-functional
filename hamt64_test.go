@@ -1,14 +1,13 @@
 package hamt_test
 
 import (
+	"fmt"
 	"log"
-	"math/rand"
 	"testing"
 	"time"
 
 	"github.com/lleo/go-hamt-functional/hamt64"
 	"github.com/lleo/go-hamt/stringkey"
-	"github.com/lleo/stringutil"
 )
 
 func TestPutOne64(t *testing.T) {
@@ -26,12 +25,12 @@ func TestPutOne64(t *testing.T) {
 }
 
 // Used progs/findCollisionDepth0.go to find collison at depth 0 for "aaa".
-// s = aaa; H60 = /01/28/12/24/09/03;
-// s = abh; H60 = /01/26/11/24/25/01;
+// s = aax; H60 = /52/10/59/43/43/33/17/51/28/35
+// s = acb; H60 = /52/60/58/43/43/33/49/50/28/35
 func TestCollisionCreatesTable64(t *testing.T) {
 	var h = hamt64.Hamt{}
-	var k0 = stringkey.New("aaa")
-	var k1 = stringkey.New("abh")
+	var k0 = stringkey.New("aax")
+	var k1 = stringkey.New("acb")
 
 	var inserted bool
 	h, inserted = h.Put(k0, 0)
@@ -46,7 +45,7 @@ func TestCollisionCreatesTable64(t *testing.T) {
 
 }
 
-func xTestHash60Collision(t *testing.T) {
+func TestHash60Collision(t *testing.T) {
 	var name = "TestMaxDepthCollision"
 
 	var s60 = "/00/28/10/00/26/13"
@@ -77,21 +76,21 @@ func TestBuildHamt64(t *testing.T) {
 	var name = "TestBuildHamt64:" + CFG
 	StartTime[name] = time.Now()
 
-	var h = hamt64.Hamt{}
+	TestHamt64 = hamt64.Hamt{} // global TestHamt64
 
 	for _, kv := range KVS {
 		var k = kv.Key
 		var v = kv.Val
 
-		var inserted bool
-		h, inserted = h.Put(k, v)
-		if !inserted {
-			t.Fatalf("failed to put k=%s\n", k)
+		var addded bool
+		TestHamt64, addded = TestHamt64.Put(k, v)
+		if !addded {
+			t.Fatalf("failed to add (probably already exists; bad!) TestHamt64.Put(%s)\n", k)
 		}
 	}
 
-	if h.Nentries() != uint(len(KVS)) {
-		t.Fatalf("h.entries,%d != len(KVS),%d", h.Nentries(), len(KVS))
+	if TestHamt64.Nentries() != uint(len(KVS)) {
+		t.Fatalf("TestHamt64.entries,%d != len(KVS),%d", TestHamt64.Nentries(), len(KVS))
 	}
 
 	RunTime[name] = time.Since(StartTime[name])
@@ -100,12 +99,9 @@ func TestBuildHamt64(t *testing.T) {
 func TestLookupAll64(t *testing.T) {
 	var name = "TestLookupAll:" + CFG
 
-	//StartTime[name+"-full"] = time.Now()
-	//
-	//var _, f = TestHamt64.Get(stringkey.New("aaa"))
-	//if !f {
-	//	TestHamt64 = createHamt64("LookupAll:TestHamt64", TYP)
-	//}
+	if TestHamt64.IsEmpty() || TestHamt64.Nentries() != len(KVS) {
+		TestHamt64 = createHamt64(name, KVS, TYP)
+	}
 
 	StartTime[name] = time.Now()
 
@@ -129,6 +125,10 @@ func TestLookupAll64(t *testing.T) {
 func TestDeleteAll64(t *testing.T) {
 	var name = "TestDeleteAll" + CFG
 
+	if TestHamt64.IsEmpty() || TestHamt64.Nentries() != len(KVS) {
+		TestHamt64 = createHamt64(name, KVS, TYP)
+	}
+
 	StartTime[name] = time.Now()
 	var h = TestHamt64
 
@@ -151,50 +151,63 @@ func TestDeleteAll64(t *testing.T) {
 }
 
 func BenchmarkHamt64Get(b *testing.B) {
+	var name = fmt.Sprintf("BenchmarkHamt64Get#%d", b.N)
 	log.Printf("BenchmarkHamt64Get: b.N=%d", b.N)
 
-	//var _, f = TestHamt64.Get(stringkey.New("aaa"))
-	//if !f {
-	//	TestHamt64 = createHamt64("TestHamt64", TYP)
-	//	b.ResetTimer()
-	//}
+	var kvs = buildKeyVals(name, b.N, "aaa", 0)
+	var lookupHamt64 = createHamt64(name, kvs, TYP)
+
+	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		var j = int(rand.Int31()) % numKvs
-		var key = KVS[j].Key
-		var val = KVS[j].Val
-		var v, found = TestHamt64.Get(key)
+		var key = kvs[i].Key
+		var val = kvs[i].Val
+		var v, found = lookupHamt64.Get(key)
 		if !found {
 			b.Fatalf("H.Get(%s) not found", key)
 		}
 		if v != val {
-			b.Fatalf("val,%v != KVS[%d].val,%v", v, j, val)
+			b.Fatalf("val,%v != kvs[%d].val,%v", v, i, val)
 		}
 	}
 }
 
 func BenchmarkHamt64Put(b *testing.B) {
+	var name = fmt.Sprintf("BenchmarkHamt64Put#%d", b.N)
 	log.Printf("BenchmarkHamt64Put: b.N=%d", b.N)
 
+	var kvs = buildKeyVals(name, b.N, "aaa", 0)
+
+	b.ResetTimer()
+
 	var h = hamt64.Hamt{}
-	var s = "aaa"
 	for i := 0; i < b.N; i++ {
-		key := stringkey.New(s)
-		val := i
-		h, _ = h.Put(key, val)
-		s = stringutil.DigitalInc(s)
+		key := kvs[i].Key
+		val := kvs[i].Val
+
+		var added bool
+		h, added = h.Put(key, val)
+		if !added {
+			b.Fatalf("failed to h.Put(%s, %v)", key, val)
+		}
 	}
 }
 
 func BenchmarkHamt64Del(b *testing.B) {
+	var name = fmt.Sprintf("BenchmarkHamt64Del#%d", b.N)
 	log.Printf("BenchmarkHamt64Del: b.N=%d", b.N)
 
-	var h = TestHamt64
+	var kvs = buildKeyVals(name, b.N+1, "aaa", 0)
+	var deleteHamt64 = createHamt64(name, kvs, TYP)
+
+	b.ResetTimer()
 
 	StartTime["run BenchmarkHamt64Del"] = time.Now()
 
+	var h = deleteHamt64
+
 	for i := 0; i < b.N; i++ {
-		kv := KVS[i]
+		kv := kvs[i]
 		key := kv.Key
 		val := kv.Val
 
@@ -210,7 +223,7 @@ func BenchmarkHamt64Del(b *testing.B) {
 	}
 
 	if h.IsEmpty() {
-		b.Fatal("DeleteHamt64.IsEmpty() => true; hence this wasn't a valid benchmark")
+		b.Fatal("h.IsEmpty() => true; hence this wasn't a valid benchmark")
 	}
 
 	RunTime["run BenchmarkHamt64Del"] = time.Since(StartTime["run BenchmarkHamt64Del"])
