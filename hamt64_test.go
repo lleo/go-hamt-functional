@@ -99,7 +99,7 @@ func TestBuildHamt64(t *testing.T) {
 func TestLookupAll64(t *testing.T) {
 	var name = "TestLookupAll:" + CFG
 
-	if TestHamt64.IsEmpty() || TestHamt64.Nentries() != len(KVS) {
+	if TestHamt64.IsEmpty() || TestHamt64.Nentries() != uint(len(KVS)) {
 		TestHamt64 = createHamt64(name, KVS, TYP)
 	}
 
@@ -125,7 +125,7 @@ func TestLookupAll64(t *testing.T) {
 func TestDeleteAll64(t *testing.T) {
 	var name = "TestDeleteAll" + CFG
 
-	if TestHamt64.IsEmpty() || TestHamt64.Nentries() != len(KVS) {
+	if TestHamt64.IsEmpty() || TestHamt64.Nentries() != uint(len(KVS)) {
 		TestHamt64 = createHamt64(name, KVS, TYP)
 	}
 

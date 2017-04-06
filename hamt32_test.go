@@ -99,7 +99,7 @@ func TestBuildHamt32(t *testing.T) {
 func TestLookupAll32(t *testing.T) {
 	var name = "TestLookupAll:" + CFG
 
-	if TestHamt32.IsEmpty() || TestHamt32.Nentries() != len(KVS) {
+	if TestHamt32.IsEmpty() || TestHamt32.Nentries() != uint(len(KVS)) {
 		TestHamt32 = createHamt32(name, KVS, TYP)
 	}
 
@@ -125,7 +125,7 @@ func TestLookupAll32(t *testing.T) {
 func TestDeleteAll32(t *testing.T) {
 	var name = "TestDeleteAll" + CFG
 
-	if TestHamt32.IsEmpty() || TestHamt32.Nentries() != len(KVS) {
+	if TestHamt32.IsEmpty() || TestHamt32.Nentries() != uint(len(KVS)) {
 		TestHamt32 = createHamt32(name, KVS, TYP)
 	}
 
