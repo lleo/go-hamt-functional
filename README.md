@@ -31,9 +31,9 @@ is created, as well as it's parent interior node, and a new root node.
 	           /  +---\----- +      \ 	   	   	
               /  /     \             \
 	   tree node 1   tree node 2  tree node 2'
-	  	  /  \          /  \        /   \
-	     /    \        / +--\------+     \
-        /  	   \   	  /	/  	 \ 	   	   	  \
+	    /  \          /  \        /   \
+           /    \        / +--\------+     \
+          /  	 \   	/ /    \ 	    \
 	Leaf 1	Leaf 2  Leaf 3  Leaf 4     Leaf 4'
 
 Given this approach to changing a tree, a tree with a wide branching factor
