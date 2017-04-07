@@ -26,15 +26,15 @@ Imagine a hypothetical tree structure with four leaves, two interior nodes and
 a root node. If you change the fourth leaf node, then a new fourth leaf node
 is created, as well as it's parent interior node, and a new root node.
 
-	        root tree node   root tree node'
-	            /    \         /   \   	 	
-	           /  +---\----- +      \ 	   	   	
+            root tree node   root tree node'
+                /    \         /   \
+               /  +---\----- +      \
               /  /     \             \
-	   tree node 1   tree node 2  tree node 2'
-	    /  \          /  \        /   \
+         tree node 1   tree node 2  tree node 2'
+            /  \          /  \        /   \
            /    \        / +--\------+     \
-          /  	 \   	/ /    \ 	    \
-	Leaf 1	Leaf 2  Leaf 3  Leaf 4     Leaf 4'
+          /      \      / /    \            \
+      Leaf 1   Leaf 2 Leaf 3  Leaf 4      Leaf 4'
 
 Given this approach to changing a tree, a tree with a wide branching factor
 would be relatively shallow. So the path from root to leaf would be short and
