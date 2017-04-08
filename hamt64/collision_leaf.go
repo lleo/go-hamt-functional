@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/lleo/go-hamt/key"
+	"github.com/lleo/go-hamt-key"
 )
 
 type collisionLeaf struct {
@@ -18,7 +18,8 @@ func newCollisionLeaf(kvs []key.KeyVal) *collisionLeaf {
 	return leaf
 }
 
-func (l collisionLeaf) Hash60() uint64 {
+func (l collisionLeaf) Hash60() key.HashVal60 {
+	// valid because ALL l.kvs[*].Key.Hash60() MUST be the same key.HashVal60
 	return l.kvs[0].Key.Hash60()
 }
 

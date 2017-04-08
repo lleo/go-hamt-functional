@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/lleo/go-hamt-functional/hamt32"
-	"github.com/lleo/go-hamt/stringkey"
+	"github.com/lleo/go-hamt-key/stringkey"
 )
 
 func TestPutOne32(t *testing.T) {
@@ -46,10 +46,10 @@ func TestCollisionCreatesTable32(t *testing.T) {
 }
 
 func TestHash30Collision(t *testing.T) {
-	var name = "TestMaxDepthCollision"
+	//var name = "TestMaxDepthCollision"
 
-	var s30 = "/00/28/10/00/26/13"
-	var h30 = hamt32.StringToH30(s30)
+	//var s30 = "/00/28/10/00/26/13"
+	//var h30 = key.ParseHashVal30(s30)
 
 	var k0 = stringkey.New("ewwd") // val=103327,  H30=/00/28/10/00/26/13
 	var v0 = 103327
@@ -69,7 +69,7 @@ func TestHash30Collision(t *testing.T) {
 		t.Fatalf("Failed to Put(%s, %d)\n", k1, v1)
 	}
 
-	log.Printf("%s: h30=%#x h=\n%s", name, h30, h.LongString(""))
+	//log.Printf("%s: h30=%#x h=\n%s", name, h30, h.LongString(""))
 }
 
 func TestBuildHamt32(t *testing.T) {

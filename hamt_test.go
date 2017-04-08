@@ -12,8 +12,8 @@ import (
 
 	"github.com/lleo/go-hamt-functional/hamt32"
 	"github.com/lleo/go-hamt-functional/hamt64"
-	"github.com/lleo/go-hamt/key"
-	"github.com/lleo/go-hamt/stringkey"
+	"github.com/lleo/go-hamt-key"
+	"github.com/lleo/go-hamt-key/stringkey"
 	"github.com/pkg/errors"
 
 	"github.com/lleo/stringutil"

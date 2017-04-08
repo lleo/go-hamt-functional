@@ -4,17 +4,19 @@ import (
 	"fmt"
 	"log"
 	"strings"
+
+	"github.com/lleo/go-hamt-key"
 )
 
 type fullTable struct {
-	hashPath uint64 // depth*nBits of hash to get to this location in the Trie
+	hashPath key.HashVal60 // depth*nBits of hash to get to this location in the Trie
 	depth    uint
 	numEnts  uint
 	nodes    [TableCapacity]nodeI
 }
 
 func createRootFullTable(leaf leafI) tableI {
-	var idx = index(leaf.Hash60(), 0)
+	var idx = leaf.Hash60().Index(0)
 
 	var ft = new(fullTable)
 	//ft.hashPath = 0
@@ -27,15 +29,15 @@ func createRootFullTable(leaf leafI) tableI {
 
 func createFullTable(depth uint, leaf1 leafI, leaf2 flatLeaf) tableI {
 	var retTable = new(fullTable)
-	retTable.hashPath = leaf1.Hash60() & hashPathMask(depth)
+	retTable.hashPath = leaf1.Hash60() & key.HashPathMask60(depth-1)
 	retTable.depth = depth
 
 	var curTable = retTable
 	var hashPath = retTable.hashPath
 	var d uint
 	for d = depth; d < MaxDepth; d++ {
-		var idx1 = index(leaf1.Hash60(), d)
-		var idx2 = index(leaf2.Hash60(), d)
+		var idx1 = leaf1.Hash60().Index(d)
+		var idx2 = leaf2.Hash60().Index(d)
 
 		if idx1 != idx2 {
 			curTable.nodes[idx1] = leaf1
@@ -47,7 +49,8 @@ func createFullTable(depth uint, leaf1 leafI, leaf2 flatLeaf) tableI {
 		}
 		// idx1 == idx2 && continue
 
-		hashPath = buildHashPath(hashPath, idx1, d+1)
+		//hashPath = hashPath.BuildHashPath(idx1, d)
+		hashPath = leaf1.Hash60() & key.HashPathMask60(d)
 
 		var newTable = new(fullTable)
 		newTable.hashPath = hashPath
@@ -61,8 +64,8 @@ func createFullTable(depth uint, leaf1 leafI, leaf2 flatLeaf) tableI {
 	// We either BREAK out of the loop,
 	// OR we hit d == MaxDepth.
 	if d == MaxDepth {
-		var idx1 = index(leaf1.Hash60(), d)
-		var idx2 = index(leaf2.Hash60(), d)
+		var idx1 = leaf1.Hash60().Index(d)
+		var idx2 = leaf2.Hash60().Index(d)
 
 		if idx1 != idx2 {
 			curTable.nodes[idx1] = leaf1
@@ -83,18 +86,19 @@ func createFullTable(depth uint, leaf1 leafI, leaf2 flatLeaf) tableI {
 		// Check if the path of leaf1 is not equal to the one leaf2 just traversed.
 		if leaf1.Hash60() != leaf2.Hash60() {
 			log.Printf("MaxDepth=%d; d=%d; idx1=%d; idx2=%d", MaxDepth, d, idx1, idx2)
-			log.Panicf("createFullTable: %s,0x%06x != %s,0x%06x", h60ToString(leaf1.Hash60()), leaf1.Hash60(), h60ToString(leaf2.Hash60()), leaf2.Hash60())
+			log.Panicf("createFullTable: %s,0x%06x != %s,0x%06x",
+				leaf1.Hash60(), leaf1.Hash60(), leaf2.Hash60(), leaf2.Hash60())
 		}
 
 		// Just for completeness; leaf1.Hash60() == leaf2.hash60()
 		var newLeaf, _ = leaf1.put(leaf2.key, leaf2.val)
-		curTable.insert(idx1, newLeaf)
+		curTable.nodes[idx1] = newLeaf
 	}
 
 	return retTable
 }
 
-func upgradeToFullTable(hashPath uint64, depth uint, tabEnts []tableEntry) tableI {
+func upgradeToFullTable(hashPath key.HashVal60, depth uint, tabEnts []tableEntry) tableI {
 	var ft = new(fullTable)
 	ft.hashPath = hashPath
 	ft.depth = depth
@@ -108,7 +112,7 @@ func upgradeToFullTable(hashPath uint64, depth uint, tabEnts []tableEntry) table
 }
 
 // Hash60() is required for nodeI
-func (t fullTable) Hash60() uint64 {
+func (t fullTable) Hash60() key.HashVal60 {
 	return t.hashPath
 }
 
@@ -146,7 +150,7 @@ func (t fullTable) entries() []tableEntry {
 	return ents
 }
 
-// Get(uint64) is required for tableI
+// Get() is required for tableI
 func (t fullTable) Get(idx uint) nodeI {
 	return t.nodes[idx]
 }
@@ -187,7 +191,7 @@ func (t fullTable) remove(idx uint) tableI {
 // String() is required for nodeI
 func (t fullTable) String() string {
 	// fullTable{hashPath:/%d/%d/%d/%d/%d/%d, nentries:%d,}
-	return fmt.Sprintf("fullTable{hashPath:%s, nentries()=%d, depth=%d}", hashPathString(t.hashPath, t.depth), t.nentries(), t.depth)
+	return fmt.Sprintf("fullTable{hashPath:%s, nentries()=%d, depth=%d}", t.hashPath.HashPathString(t.depth), t.nentries(), t.depth)
 }
 
 // LongString() is required for tableI
@@ -195,7 +199,7 @@ func (t fullTable) LongString(indent string, recurse bool) string {
 	//var strs = make([]string, 2+len(t.nodes))
 	var strs = make([]string, 2+t.nentries())
 
-	strs[0] = indent + fmt.Sprintf("fullTable{hashPath:%s, nentries()=%d, t.depth=%d,", hashPathString(t.hashPath, t.depth), t.nentries(), t.depth)
+	strs[0] = indent + fmt.Sprintf("fullTable{hashPath:%s, nentries()=%d, t.depth=%d,", t.hashPath.HashPathString(t.depth), t.nentries(), t.depth)
 
 	var j int
 	for i, n := range t.nodes {

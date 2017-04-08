@@ -3,7 +3,7 @@ package hamt32
 import (
 	"fmt"
 
-	"github.com/lleo/go-hamt/key"
+	"github.com/lleo/go-hamt-key"
 )
 
 type flatLeaf struct {
@@ -28,7 +28,7 @@ func (l flatLeaf) Val() interface{} {
 }
 
 // Hash30() is required for nodeI
-func (l flatLeaf) Hash30() uint32 {
+func (l flatLeaf) Hash30() key.HashVal30 {
 	return l.key.Hash30()
 }
 

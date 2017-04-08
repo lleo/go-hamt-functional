@@ -1,7 +1,7 @@
 package hamt64
 
 import (
-	"github.com/lleo/go-hamt/key"
+	"github.com/lleo/go-hamt-key"
 )
 
 // nodeI is the interface for every entry in a table; so table entries are
@@ -22,7 +22,7 @@ import (
 // For collisionLeafs this is the definition of what a collision is.
 //
 type nodeI interface {
-	Hash60() uint64
+	Hash60() key.HashVal60
 	String() string
 }
 

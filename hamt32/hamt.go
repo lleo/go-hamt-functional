@@ -16,111 +16,25 @@ package hamt32
 
 import (
 	"fmt"
-	"strconv"
-	"strings"
 
-	"github.com/lleo/go-hamt/key"
-	"github.com/pkg/errors"
+	"github.com/lleo/go-hamt-key"
 )
 
 // Nbits constant is the number of bits(5) a 30bit hash value is split into,
 // to provied the indexes of a HAMT.
-const Nbits uint = 5
+//const Nbits uint = 5
+const Nbits uint = key.BitsPerLevel30
 
 // MaxDepth constant is the maximum depth(5) of Nbits values that constitute
 // the path in a HAMT, from [0..MaxDepth]for a total of MaxDepth+1(6) levels.
 // Nbits*(MaxDepth+1) == HASHBITS (ie 5*(5+1) == 30).
-const MaxDepth uint = 5
+//const MaxDepth uint = 5
+const MaxDepth uint = key.MaxDepth30
 
 // TableCapacity constant is the number of table entries in a each node of
 // a HAMT datastructure; its value is 1<<Nbits (ie 2^5 == 32).
-const TableCapacity uint = 1 << Nbits
-
-func hashPathMask(depth uint) uint32 {
-	return uint32(1<<(depth*Nbits)) - 1
-}
-
-// Create a string of the form "/%02d/%02d..." to describe a hashPath of
-// a given depth.
-//
-// If you want hashPathString() to include the current idx, you Must
-// add one to depth. You may need to do this because you are creating
-// a table to be put at the idx'th slot of the current table.
-func hashPathString(hashPath uint32, depth uint) string {
-	if depth == 0 {
-		return "/"
-	}
-	var strs = make([]string, depth)
-
-	for d := uint(0); d < depth; d++ {
-		var idx = index(hashPath, d)
-		strs[d] = fmt.Sprintf("%02d", idx)
-	}
-
-	return "/" + strings.Join(strs, "/")
-}
-
-func h30ToString(h30 uint32) string {
-	return hashPathString(h30, MaxDepth)
-}
-
-func StringToH30(s string) uint32 {
-	if !strings.HasPrefix(s, "/") {
-		panic(errors.New("does not start with '/'"))
-	}
-	var s0 = s[1:]
-	var as = strings.Split(s0, "/")
-
-	var h30 uint32 = 0
-	for i, s1 := range as {
-		var ui, err = strconv.ParseUint(s1, 10, int(Nbits))
-		if err != nil {
-			panic(errors.Wrap(err, fmt.Sprintf("strconv.ParseUint(%q, %d, %d) failed", s1, 10, Nbits)))
-		}
-		h30 |= uint32(ui << (uint(i) * Nbits))
-		//fmt.Printf("%d: h30 = %q %2d %#02x %05b\n", i, s1, ui, ui, ui)
-	}
-
-	return h30
-}
-
-//// h30ToBitStr is for printf debugging use
-//func h30ToBitStr(h30 uint32) string {
-//	var strs = make([]string, MaxDepth+1)
-//
-//	for depth := uint(0); depth <= MaxDepth; depth++ {
-//		var idx = index(h30, depth)
-//		strs[MaxDepth-depth] = fmt.Sprintf("%05b", idx)
-//	}
-//
-//	return strings.Join(strs, " ")
-//}
-
-//indexMask() generates a Nbits(5-bit) mask for a given depth
-func indexMask(depth uint) uint32 {
-	return uint32((1<<Nbits)-1) << (depth * Nbits)
-}
-
-//index() calculates a Nbits(5-bit) integer based on the hash and depth
-func index(h30 uint32, depth uint) uint {
-	var idxMask = indexMask(depth)
-	var idx = uint((h30 & idxMask) >> (depth * Nbits))
-	return idx
-}
-
-//buildHashPath(hashPath, idx, depth)
-//hashPath will be depth Nbits long
-func buildHashPath(hashPath uint32, idx, depth uint) uint32 {
-	var mask uint32 = (1 << ((depth - 1) * Nbits)) - 1
-	hashPath = hashPath & mask
-
-	return hashPath | uint32(idx<<((depth-1)*Nbits))
-}
-
-type keyVal struct {
-	key key.Key
-	val interface{}
-}
+//const TableCapacity uint = 1 << Nbits
+const TableCapacity uint = 1 << key.BitsPerLevel30
 
 // GradeTables variable controls whether Hamt structures will upgrade/
 // downgrade compressed/full tables. This variable and FullTableInit
@@ -157,9 +71,9 @@ func (h Hamt) IsEmpty() bool {
 	return h == Hamt{}
 }
 
-func (h Hamt) Root() tableI {
-	return h.root
-}
+//func (h Hamt) Root() tableI {
+//	return h.root
+//}
 
 func (h Hamt) Nentries() uint {
 	return h.nentries
@@ -174,17 +88,14 @@ func createRootTable(leaf leafI) tableI {
 
 //func createTable(depth uint, leaf1 leafI, k key.Key, v interface{}) tableI {
 func createTable(depth uint, leaf1 leafI, leaf2 flatLeaf) tableI {
-	//var hashPath = k.Hash30() & hashPathMask(depth)
-	//var leaf2 = *newFlatLeaf(k, v)
-
 	if FullTableInit {
 		return createFullTable(depth, leaf1, leaf2)
 	}
 	return createCompressedTable(depth, leaf1, leaf2)
 }
 
-// copyUp is ONLY called on a fresh copy of the current Hamt. Hence, modifying
-// it is allowed.
+// persist() is ONLY called on a fresh copy of the current Hamt.
+// Hence, modifying it is allowed.
 func (nh *Hamt) persist(oldTable, newTable tableI, path tableStack) {
 	if path.isEmpty() {
 		nh.root = newTable
@@ -194,7 +105,7 @@ func (nh *Hamt) persist(oldTable, newTable tableI, path tableStack) {
 	var depth = uint(path.len())
 	var parentDepth = depth - 1
 
-	var parentIdx = index(oldTable.Hash30(), parentDepth)
+	var parentIdx = oldTable.Hash30().Index(parentDepth)
 
 	var oldParent = path.pop()
 	var newParent tableI
@@ -224,7 +135,7 @@ func (h Hamt) find(k key.Key) (path tableStack, leaf leafI, idx uint) {
 
 	for depth = 0; depth < MaxDepth; depth++ {
 		path.push(curTable)
-		idx = index(h30, depth)
+		idx = h30.Index(depth)
 		curNode = curTable.Get(idx)
 
 		switch n := curNode.(type) {
@@ -241,7 +152,7 @@ func (h Hamt) find(k key.Key) (path tableStack, leaf leafI, idx uint) {
 	}
 	if depth == MaxDepth {
 		path.push(curTable)
-		idx = index(h30, depth)
+		idx = h30.Index(depth)
 		curNode = curTable.Get(idx)
 
 		if curNode == nil {

@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/lleo/go-hamt-functional/hamt64"
-	"github.com/lleo/go-hamt/stringkey"
+	"github.com/lleo/go-hamt-key/stringkey"
 )
 
 func TestPutOne64(t *testing.T) {
@@ -46,10 +46,10 @@ func TestCollisionCreatesTable64(t *testing.T) {
 }
 
 func TestHash60Collision(t *testing.T) {
-	var name = "TestMaxDepthCollision"
+	//var name = "TestMaxDepthCollision"
 
-	var s60 = "/00/28/10/00/26/13"
-	var h60 = hamt64.StringToH60(s60)
+	//var s60 = "/00/28/10/00/26/13"
+	//var h60 = key.ParseHashVal60(s60)
 
 	var k0 = stringkey.New("ewwd") // val=103647,  H60=/00/28/10/00/26/13
 	var v0 = 103647
@@ -69,7 +69,7 @@ func TestHash60Collision(t *testing.T) {
 		t.Fatalf("Failed to Put(%s, %d)\n", k1, v1)
 	}
 
-	log.Printf("%s: h60=%#x h=\n%s", name, h60, h.LongString(""))
+	//log.Printf("%s: h60=%#x h=\n%s", name, h60, h.LongString(""))
 }
 
 func TestBuildHamt64(t *testing.T) {
