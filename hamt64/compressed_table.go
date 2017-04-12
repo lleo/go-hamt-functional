@@ -30,7 +30,7 @@ import (
 // To figure out the index of a node in the nodes slice from the index of the bit
 // in the nodeMap we first find out if that bit in the nodeMap is set by
 // calculating if "nodeMap & (1<<idx) > 0" is true the idx'th bit is set. Given
-// that each 64 entry table is indexed by 5bit section (2^5==64) of the key hash,
+// that each 64 entry table is indexed by 6bit section (2^6==64) of the key hash,
 // there is a function to calculate the index called index(hash, depth);
 //
 type compressedTable struct {
