@@ -10,13 +10,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lleo/go-hamt-functional"
 	"github.com/lleo/go-hamt-functional/hamt32"
 	"github.com/lleo/go-hamt-functional/hamt64"
 	"github.com/lleo/go-hamt-key"
 	"github.com/lleo/go-hamt-key/stringkey"
-	"github.com/pkg/errors"
-
 	"github.com/lleo/stringutil"
+	"github.com/pkg/errors"
 )
 
 // In a Hamt32 with 3149824 entries, there is 32 collisionLeafs. The creation
@@ -99,8 +99,8 @@ func TestMain(m *testing.M) {
 
 	if allOpt {
 		//for _, TYP = range []int{fullonly, componly, hybrid} {
-		for _, TYP = range []int{hybrid, componly, fullonly} {
-			CFG = cfgStr[TYP]
+		for _, typ := range []int{hybrid, componly, fullonly} {
+			setLibrary(typ) //updates TYP & CFG globals
 			var name = "all tests: " + CFG
 			StartTime[name] = time.Now()
 
@@ -119,25 +119,20 @@ func TestMain(m *testing.M) {
 		var msg string
 		var name string
 		if hybridOpt {
-			TYP = hybrid
-			CFG = cfgStr[TYP]
+			setLibrary(hybrid) //updates TYP & CFG globals
 			msg = fmt.Sprintf("hybridOpt: for type = %s", CFG)
 			name = "one test: " + CFG
 		} else if fullonlyOpt {
-			TYP = fullonly
-			CFG = cfgStr[TYP]
+			setLibrary(fullonly) //updates TYP & CFG globals
 			msg = fmt.Sprintf("fullonlyOpt: for type = %s", CFG)
 			name = "one test: " + CFG
 		} else /* if componlyOpt */ {
-			TYP = componly
-			CFG = cfgStr[TYP]
+			setLibrary(componly) //updates TYP & CFG globals
 			msg = fmt.Sprintf("componlyOpt: for type = %s", CFG)
 			name = "one test: " + CFG
 		}
 
 		StartTime[name] = time.Now()
-
-		setLibrary(TYP)
 
 		log.Println(msg)
 		fmt.Println(msg)
@@ -184,8 +179,8 @@ func RunTimes() string {
 	return s
 }
 
-var initializeNum int
-
+// setLirary() reaches into hamt32 and hamt64 to set the GradeTables and
+// FullTableInit values and updates TYP & CFG globals in this namespace.
 func setLibrary(typ int) {
 	switch typ {
 	case hybrid:
@@ -204,8 +199,10 @@ func setLibrary(typ int) {
 		//hamt64.GradeTables = false
 		//hamt64.FullTableInit = false
 	default:
-		panic(fmt.Sprintf("unknown type %d", typ))
+		log.Panicf("unknown type %d", typ)
 	}
+	TYP = typ
+	CFG = cfgStr[TYP]
 }
 
 func createHamt32(prefix string, kvs []key.KeyVal, typ int) hamt32.Hamt {
@@ -355,98 +352,62 @@ func genRandomizedKvs(kvs []key.KeyVal) []key.KeyVal {
 //	return randSvs
 //}
 
-//func BenchmarkMapGet(b *testing.B) {
-//	var name = "BenchmarkMapGet"
-//	log.Printf("%s b.N=%d\n", name, b.N)
-//
-//	var _, ok = LookupMap["aaa"]
-//	if !ok {
-//		LookupMap, DeleteMap = buildMaps(numKvs)
-//	}
-//
-//	StartTime[name] = time.Now()
-//
-//	b.ResetTimer()
-//
-//	for i := 0; i < b.N; i++ {
-//		var j = i % numKvs
-//		var s = SVS[j].Str
-//		var v = SVS[j].Val
-//		var val, ok = LookupMap[s]
-//		if !ok {
-//			b.Fatalf("LookupMap[%q] does not exist", s)
-//		}
-//		if val != v {
-//			b.Fatalf("LookupMap[%q] != %d", s, KVS[j].Val)
-//		}
-//	}
-//
-//	RunTime[name] = time.Since(StartTime[name])
-//}
-//
-//func BenchmarkMapPut(b *testing.B) {
-//	var name = "BenchmarkMapPut"
-//	log.Printf("%s b.N=%d\n", name, b.N)
-//	StartTime[name] = time.Now()
-//	var m = make(map[string]int)
-//
-//	b.ResetTimer()
-//
-//	for i := 0; i < b.N; i++ {
-//		var j = i % numKvs
-//		var s = SVS[j].Str
-//		var v = SVS[j].Val
-//		m[s] = v
-//	}
-//
-//	RunTime[name] = time.Since(StartTime[name])
-//}
-//
-//var rebuildDeleteMapNum int
-//
-//func rebuildDeleteMap(svs []StrVal) {
-//	var name = fmt.Sprintf("BenchmarkMapPut-%d", rebuildDeleteMapNum)
-//	rebuildDeleteMapNum++
-//
-//	StartTime[name] = time.Now()
-//
-//	for _, sv := range svs {
-//		var _, ok = DeleteMap[sv.Str]
-//		if ok {
-//			break
-//		}
-//		//else
-//		delete(DeleteMap, sv.Str)
-//
-//		DeleteMap[sv.Str] = sv.Val
-//	}
-//
-//	RunTime[name] = time.Since(StartTime[name])
-//}
-//
-//func BenchmarkMapDel(b *testing.B) {
-//	var name = "BenchmarkMapDel"
-//	log.Printf("%s b.N=%d\n", name, b.N)
-//	StartTime[name] = time.Now()
-//	rebuildDeleteMap(SVS)
-//	RunTime[name] = time.Since(StartTime[name])
-//
-//	b.ResetTimer()
-//
-//	for i := 0; i < b.N; i++ {
-//		var j = i % numKvs
-//		var k = SVS[j].Str
-//		var v = SVS[j].Val
-//
-//		var val, ok = DeleteMap[k]
-//		if ok {
-//			delete(DeleteMap, k)
-//		} else if val != v {
-//			b.Fatalf("DeleteMap[%s],%d != %d", k, v, val)
-//		}
-//
-//		//b.StopTimer()
-//		DeleteMap[k] = v
-//		//b.StartTimer()
-//	}
-//}
+func TestGlobal32(t *testing.T) {
+	var h = hamt.NewHamt32()
+
+	var k = stringkey.New("aaa")
+	var v = 1
+
+	var h1, added = h.Put(k, v)
+	if !added {
+		t.Fatalf("failed to add k=%s", k)
+	}
+
+	var val, found = h1.Get(k)
+	if !found {
+		t.Fatalf("failed to get k=%k", k)
+	}
+	if v != val {
+		t.Fatalf("retrieved wrong value v,%d != val,%d", v, val)
+	}
+
+	if !h.IsEmpty() {
+		t.Fatal("original Hamt not empty")
+	}
+	if h1.IsEmpty() {
+		t.Fatal("new h1 Hamt is empty")
+	}
+	if h1.Nentries() != 1 {
+		t.Fatalf("new h1.Nentries(),%d != 1", h1.Nentries())
+	}
+}
+
+func TestGlobal64(t *testing.T) {
+	var h = hamt.NewHamt64()
+
+	var k = stringkey.New("aaa")
+	var v = 1
+
+	var h1, added = h.Put(k, v)
+	if !added {
+		t.Fatalf("failed to add k=%s", k)
+	}
+
+	var val, found = h1.Get(k)
+	if !found {
+		t.Fatalf("failed to get k=%k", k)
+	}
+	if v != val {
+		t.Fatalf("retrieved wrong value v,%d != val,%d", v, val)
+	}
+
+	if !h.IsEmpty() {
+		t.Fatal("original Hamt not empty")
+	}
+	if h1.IsEmpty() {
+		t.Fatal("new h1 Hamt is empty")
+	}
+	if h1.Nentries() != 1 {
+		t.Fatalf("new h1.Nentries(),%d != 1", h1.Nentries())
+	}
+}
