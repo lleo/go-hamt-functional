@@ -116,20 +116,20 @@ Since this is an "immutable" implementation of HAMT you do not have to
 constructed a new HAMT structure via 'new()'. Just use hamt32.Hamt as a
 value.
 
-   import (
-       "github.com/lleo/go-hamt-functional/hamt32"
-	   "github.com/lleo/go-hamt-key/stringkey"
-   )
-
-   var h hamt32.Hamt
-   for i, s := range []string{"foo", "bar", "baz"} {
-       var k = stringkey.New(s)
-	   var added bool
-       h, added = h.Put(k, i)
-	   if !added {
-	       log.Panicf("replaced, didn't add, value %d, for key %s", i, k)
-	   }
-   }
+    import (
+        "github.com/lleo/go-hamt-functional/hamt32"
+        "github.com/lleo/go-hamt-key/stringkey"
+    )
+    
+    var h hamt32.Hamt
+    for i, s := range []string{"foo", "bar", "baz"} {
+        var k = stringkey.New(s)
+        var added bool
+        h, added = h.Put(k, i)
+            if !added {
+                log.Panicf("replaced, didn't add, value %d, for key %s", i, k)
+            }
+    }
 
 Notice that we are keeping the current value of the Hamt in the 'h' variable
 and forgetting the previous value. That allows some of the previous Hamt's
