@@ -8,26 +8,29 @@ path of any Key in this Trie. However, not all six levels of the Trie are used.
 As many levels (six or less) are used to find a unique location
 for the leaf to be placed within the Trie.
 
-If all six levels of the Trie are used for two or more key/val pairs then a
-special collision leaf will be used to store those key/val pairs,  at the sixth
+If all six levels of the Trie are used for two or more key/val pairs, then a
+special collision leaf will be used to store those key/val pairs at the sixth
 level of the Trie.
 */
 package hamt32
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/lleo/go-hamt-key"
 )
 
 // Nbits constant is the number of bits(5) a 30bit hash value is split into,
-// to provied the indexes of a HAMT.
+// to provied the indexes of a HAMT. We actually get this value from
+// key.BitsPerLevel30 in "github.com/lleo/go-hamt-key".
 //const Nbits uint = 5
 const Nbits uint = key.BitsPerLevel30
 
 // MaxDepth constant is the maximum depth(5) of Nbits values that constitute
-// the path in a HAMT, from [0..MaxDepth]for a total of MaxDepth+1(6) levels.
-// Nbits*(MaxDepth+1) == HASHBITS (ie 5*(5+1) == 30).
+// the path in a HAMT, from [0..MaxDepth] for a total of MaxDepth+1(6) levels.
+// Nbits*(MaxDepth+1) == HASHBITS (ie 5*(5+1) == 30). We actually get this
+// value from key.MaxDepth60 in "github.com/lleo/go-hamt-key".
 //const MaxDepth uint = 5
 const MaxDepth uint = key.MaxDepth30
 
@@ -133,6 +136,7 @@ func (h Hamt) find(k key.Key) (path tableStack, leaf leafI, idx uint) {
 	var depth uint
 	var curNode nodeI
 
+DepthIter:
 	for depth = 0; depth < MaxDepth; depth++ {
 		path.push(curTable)
 		idx = h30.Index(depth)
@@ -140,14 +144,16 @@ func (h Hamt) find(k key.Key) (path tableStack, leaf leafI, idx uint) {
 
 		switch n := curNode.(type) {
 		case nil:
-			return path, nil, idx
+			leaf = nil
+			break DepthIter
 		case leafI:
-			return path, n, idx
+			leaf = n
+			break DepthIter
 		case tableI:
 			curTable = n
 			// exit switch then loop for
 		default:
-			panic(fmt.Sprintf("switch default case: depth=%d; idx=%d; curNode unknown type = %T; value = %v; path=%s", depth, idx, n, n, path))
+			log.Panicf("SHOULD NOT BE REACHED: depth=%d; curNode unknown type=%T;", depth, curNode)
 		}
 	}
 	if depth == MaxDepth {
@@ -155,56 +161,61 @@ func (h Hamt) find(k key.Key) (path tableStack, leaf leafI, idx uint) {
 		idx = h30.Index(depth)
 		curNode = curTable.Get(idx)
 
-		if curNode == nil {
-			return path, nil, idx
-		} else if leaf, isLeaf := curNode.(leafI); isLeaf {
-			return path, leaf, idx
-		} else {
-			panic(fmt.Sprintf("depth,%d == MaxDepth: %d; idx=%d; unknown type = %T; value = %v; path=%s", depth, MaxDepth, idx, curNode, curNode, path))
+		switch n := curNode.(type) {
+		case nil:
+			leaf = nil
+			break
+		case leafI:
+			leaf = n
+			break
+		default:
+			//case tableI:
+			log.Printf("k = %s", k)
+			log.Printf("path=%s", path)
+			log.Printf("curTable=%s", curTable.LongString("", false))
+			log.Printf("idx=%s", idx)
+			log.Printf("curNode type=%T; value=%v", curNode, curNode)
+			log.Panicf("SHOULD NOT BE REACHED; depth,%d == MaxDepth,%d & invalid type=%T;", depth, MaxDepth, curNode)
 		}
 	}
 
-	panic("SHOULD NEVER GET HERE!")
+	return
 }
 
 // Get(k) retrieves the value for a given key from the Hamt. The bool
 // represents whether the key was found.
-func (h Hamt) Get(k key.Key) (interface{}, bool) {
+func (h Hamt) Get(k key.Key) (val interface{}, found bool) {
 	var _, leaf, _ = h.find(k)
 
-	//var depth = path.len()
-	//var curTable = path.pop()
-
 	if leaf == nil {
-		return nil, false
+		//return nil, false
+		return
 	}
 
-	var val, found = leaf.get(k)
-	if !found {
-		return nil, false
-	}
-
-	return val, true
+	val, found = leaf.get(k)
+	return
 }
 
-// Put new key/val pair into Hamt, returning a new persistant Hamt and a bool
-// indicating if the key/val pair was added(true) or mearly updated(false).
-func (h Hamt) Put(k key.Key, v interface{}) (Hamt, bool) {
-	var nh Hamt = h //copy by value
+// Put inserts a key/val pair into Hamt, returning a new persistent Hamt and a
+// bool indicating if the key/val pair was added(true) or mearly updated(false).
+func (h Hamt) Put(k key.Key, v interface{}) (nh Hamt, added bool) {
+	nh = h //copy by value
 
 	var path, leaf, idx = h.find(k)
 
 	if path == nil { // h.IsEmpty()
 		nh.root = createRootTable(newFlatLeaf(k, v))
 		nh.nentries++
-		return nh, true
+
+		//return nh, true
+		added = true
+		return
 	}
 
 	var curTable = path.pop()
 	var depth = uint(path.len())
 
 	var newTable tableI
-	var added bool
 
 	if leaf == nil {
 		newTable = curTable.insert(idx, newFlatLeaf(k, v))
@@ -227,39 +238,42 @@ func (h Hamt) Put(k key.Key, v interface{}) (Hamt, bool) {
 
 	nh.persist(curTable, newTable, path)
 
-	return nh, added
+	//return nh, added
+	return
 }
 
-// Hamt.Del(k) returns a new Hamt, the value deleted, and a boolean that
-// specifies whether or not the key was deleted (eg it didn't exist to start
-// with). Therefor you must always test deleted before using the new *Hamt
-// value.
-func (h Hamt) Del(k key.Key) (Hamt, interface{}, bool) {
-	var nh Hamt = h // copy by value
+// Hamt.Del(k) returns a Hamt structure, a value, and a boolean that specifies
+// whether or not the key was found (and therefor deleted). If the key was
+// found & deleted it returns the value assosiated with the key and a new
+// persistent Hamt structure, otherwise it returns a nil value and the original
+// (immutable) Hamt structure
+func (h Hamt) Del(k key.Key) (nh Hamt, val interface{}, deleted bool) {
+	nh = h // copy by value
 
 	var path, leaf, idx = h.find(k)
 
 	if path == nil { // h.IsEmpty()
-		return nh, nil, false
+		//return nh, nil, false
+		return
 	}
 
 	var curTable = path.pop()
 	//var depth = uint(path.len())
 
 	var newTable tableI
-	var val interface{}
-	var deleted bool
 
 	if leaf == nil {
-		//return nh, val, deleted
-		return h, nil, false
+		//return nh, val, found
+		//return h, nil, false
+		return
 	} else {
 		var newLeaf leafI
 		newLeaf, val, deleted = leaf.del(k)
 
 		if !deleted {
 			//return nh, val, deleted
-			return h, nil, false
+			//return h, nil, false
+			return
 		}
 
 		if newLeaf == nil {
@@ -275,7 +289,8 @@ func (h Hamt) Del(k key.Key) (Hamt, interface{}, bool) {
 
 	nh.persist(curTable, newTable, path)
 
-	return nh, val, deleted
+	//return nh, val, deleted
+	return
 }
 
 func (h Hamt) String() string {
