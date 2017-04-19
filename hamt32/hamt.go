@@ -1,9 +1,12 @@
 /*
 Package hamt32 implements a functional Hash Array Mapped Trie (HAMT).
-It is called hamt32 because this package is using 32 nodes for each level of
-the Trie. The term functional is used to imply immutable and persistent.
+It is called hamt32 because this package is using 32 nodes branching factor for
+each level of the Trie. The term functional is used to imply immutable and
+persistent.
 
-The 30bits of hash are separated into six 5bit values that constitue the hash
+The key to the hamt32 datastructure is imported from the
+"github.com/lleogo-hamt-key" module. We get the 30 bits of hash value from key.
+The 30bits of hash are separated into six 5 bit values that constitue the hash
 path of any Key in this Trie. However, not all six levels of the Trie are used.
 As many levels (six or less) are used to find a unique location
 for the leaf to be placed within the Trie.

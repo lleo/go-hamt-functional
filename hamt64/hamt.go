@@ -3,7 +3,9 @@ Package hamt64 implements a functional Hash Array Mapped Trie (HAMT).
 It is called hamt64 because this package is using 64 nodes for each level of
 the Trie. The term functional is used to imply immutable and persistent.
 
-The 60bits of hash are separated into ten 6bit values that constitue the hash
+The key to the hamt64 datastructure is imported from the
+"github.com/lleogo-hamt-key" module. We get the 60 bits of hash value from key.
+The 60bits of hash are separated into ten 6 bit values that constitue the hash
 path of any Key in this Trie. However, not all ten levels of the Trie are used.
 As many levels (ten or less) are used to find a unique location
 for the leaf to be placed within the Trie.

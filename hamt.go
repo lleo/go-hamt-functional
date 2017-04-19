@@ -28,7 +28,8 @@ For example, we can use a key type of a string. Hash that string into a 32 bit
 hash value. Coerce that 32 bit value into a 30 bit value. Then split that
 30 bit hash value into six 5 bit values. Those 5 bit values will index perfectly
 into tree nodes with 32 wide branching factor. Now we have tree with a string
-for the key that is AT MOST six levels deep, in other words O(1) lookup.
+for the key that is AT MOST six levels deep, in other words O(1) lookup and
+modification operations.
 
 Lets call the number of hash bits H (for hash value). The number of parts the
 hash value can be split into we'll call D (for depth). The width of each table
@@ -45,7 +46,7 @@ HAMTs are [Tries](https://en.wikipedia.org/wiki/Trie), because when we are
 trying to find a location to Get, Put, or Delete a key/value pair we mearly
 have to walk the "hash path" till we find a non-branching node. The HashPath
 is the H bit hash value, split into a ordered sequence of B bit integer values
-that is D entry tries long.
+that is, at most, D entry tries long.
 
 Lets start with a concrete example of a hamt32 (aka H=30,D=6,B=5). Given the
 string "ewyx" the Hash30() HashVal30 is 0x11a01c5e. Converted into six descreet
@@ -72,19 +73,20 @@ follows:
     h30.String()           //=> "/30/02/07/00/26/08"
 
 Now we know how to find the candidate location or entry for our operation. That
-operation can be either a straight lookup, called Get(k); or it can be an
-insertion of a key/value pair, called Put(k,v); or lastly it can be a deletion
-operation, called Del(k).
+operation can be either a straight lookup, called with h.Get(k); or it can be
+an insertion of a key/value pair, called with h.Put(k,v); or lastly it can be a
+deletion operation, called with h.Del(k).
 
 For either hamt32.Hamt or hamt64.Hamt value we have three primary operations:
 h.Get(), h.Put(), and h.Del().
 
-Only Put() and Del() modify the HAMT. When they modify a table, first the table
-is copied, then the modification is made to the copy. Next the parent table
-must be copied so that the new table's entry in the copied parent may be
+Only h.Put() and h.Del() modify the HAMT. When they modify a table, first the
+table is copied, then the modification is made to the copy. Next the parent
+table must be copied so that the new table's entry in the copied parent may be
 modified. This is continued to the root table and the HAMT structure itself is
-copied. This is the persist() call. Hence, Put() and Del() return the new HAMT
-structure as well as any other return values specific to Put() or Del().
+copied. This is the h.persist() call. Hence, h.Put() and h.Del() return the new
+HAMT structure as well as any other return values specific to h.Put() or
+h.Del().
 
 Given that Get() makes no modification of the HAMT structure, it only returns
 a boolean indicating the key was found in the HAMT and the key's value.
