@@ -140,7 +140,7 @@ func (h Hamt) find(k key.Key) (path tableStack, leaf leafI, idx uint) {
 	var curNode nodeI
 
 DepthIter:
-	for depth = 0; depth < MaxDepth; depth++ {
+	for depth = 0; depth <= MaxDepth; depth++ {
 		path.push(curTable)
 		idx = h30.Index(depth)
 		curNode = curTable.Get(idx)
@@ -153,32 +153,18 @@ DepthIter:
 			leaf = n
 			break DepthIter
 		case tableI:
+			if depth == MaxDepth {
+				log.Printf("k = %s", k)
+				log.Printf("path=%s", path)
+				log.Printf("curTable=%s", curTable.LongString("", false))
+				log.Printf("idx=%s", idx)
+				log.Printf("curNode type=%T; value=%v", curNode, curNode)
+				log.Panicf("SHOULD NOT BE REACHED; depth,%d == MaxDepth,%d & invalid type=%T;", depth, MaxDepth, curNode)
+			}
 			curTable = n
 			// exit switch then loop for
 		default:
 			log.Panicf("SHOULD NOT BE REACHED: depth=%d; curNode unknown type=%T;", depth, curNode)
-		}
-	}
-	if depth == MaxDepth {
-		path.push(curTable)
-		idx = h30.Index(depth)
-		curNode = curTable.Get(idx)
-
-		switch n := curNode.(type) {
-		case nil:
-			leaf = nil
-			break
-		case leafI:
-			leaf = n
-			break
-		default:
-			//case tableI:
-			log.Printf("k = %s", k)
-			log.Printf("path=%s", path)
-			log.Printf("curTable=%s", curTable.LongString("", false))
-			log.Printf("idx=%s", idx)
-			log.Printf("curNode type=%T; value=%v", curNode, curNode)
-			log.Panicf("SHOULD NOT BE REACHED; depth,%d == MaxDepth,%d & invalid type=%T;", depth, MaxDepth, curNode)
 		}
 	}
 
