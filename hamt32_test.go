@@ -96,8 +96,8 @@ func TestBuildHamt32(t *testing.T) {
 	RunTime[name] = time.Since(StartTime[name])
 }
 
-func TestLookupAll32(t *testing.T) {
-	var name = "TestLookupAll:" + CFG
+func TestLookupAllHamt32(t *testing.T) {
+	var name = "TestLookupAllHamt32:" + CFG
 
 	if TestHamt32.IsEmpty() || TestHamt32.Nentries() != uint(len(KVS)) {
 		TestHamt32 = createHamt32(name, KVS, TYP)

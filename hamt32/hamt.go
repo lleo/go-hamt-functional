@@ -154,12 +154,7 @@ DepthIter:
 			break DepthIter
 		case tableI:
 			if depth == MaxDepth {
-				log.Printf("k = %s", k)
-				log.Printf("path=%s", path)
-				log.Printf("curTable=%s", curTable.LongString("", false))
-				log.Printf("idx=%s", idx)
-				log.Printf("curNode type=%T; value=%v", curNode, curNode)
-				log.Panicf("SHOULD NOT BE REACHED; depth,%d == MaxDepth,%d & invalid type=%T;", depth, MaxDepth, curNode)
+				log.Panicf("SHOULD NOT BE REACHED; depth,%d == MaxDepth,%d & tableI entry found; %s", depth, MaxDepth, n)
 			}
 			curTable = n
 			// exit switch then loop for

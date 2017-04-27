@@ -152,6 +152,9 @@ DepthIter:
 			leaf = n
 			break DepthIter
 		case tableI:
+			if depth == MaxDepth {
+				log.Panicf("SHOULD NOT BE REACHED; depth,%d == MaxDepth,%d & tableI entry found; %s", depth, MaxDepth, n)
+			}
 			curTable = n
 			// exit switch then loop for
 		default:

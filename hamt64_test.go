@@ -96,8 +96,8 @@ func TestBuildHamt64(t *testing.T) {
 	RunTime[name] = time.Since(StartTime[name])
 }
 
-func TestLookupAll64(t *testing.T) {
-	var name = "TestLookupAll:" + CFG
+func TestLookupAllHamt64(t *testing.T) {
+	var name = "TestLookupAllHamt64:" + CFG
 
 	if TestHamt64.IsEmpty() || TestHamt64.Nentries() != uint(len(KVS)) {
 		TestHamt64 = createHamt64(name, KVS, TYP)
