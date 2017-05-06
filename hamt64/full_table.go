@@ -150,8 +150,8 @@ func (t fullTable) entries() []tableEntry {
 	return ents
 }
 
-// Get() is required for tableI
-func (t fullTable) Get(idx uint) nodeI {
+// get() is required for tableI
+func (t fullTable) get(idx uint) nodeI {
 	return t.nodes[idx]
 }
 
