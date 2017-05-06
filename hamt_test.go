@@ -186,18 +186,18 @@ func setLibrary(typ int) {
 	case hybrid:
 		hamt32.GradeTables = true
 		hamt32.FullTableInit = false
-		//hamt64.GradeTables = true
-		//hamt64.FullTableInit = false
+		hamt64.GradeTables = true
+		hamt64.FullTableInit = false
 	case fullonly:
 		hamt32.GradeTables = false
 		hamt32.FullTableInit = true
-		//hamt64.GradeTables = false
-		//hamt64.FullTableInit = true
+		hamt64.GradeTables = false
+		hamt64.FullTableInit = true
 	case componly:
 		hamt32.GradeTables = false
 		hamt32.FullTableInit = false
-		//hamt64.GradeTables = false
-		//hamt64.FullTableInit = false
+		hamt64.GradeTables = false
+		hamt64.FullTableInit = false
 	default:
 		log.Panicf("unknown type %d", typ)
 	}
