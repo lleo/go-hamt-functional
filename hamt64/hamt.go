@@ -139,7 +139,7 @@ func (h Hamt) find(k key.Key) (path tableStack, leaf leafI, idx uint) {
 	var curNode nodeI
 
 DepthIter:
-	for depth = 0; depth < MaxDepth; depth++ {
+	for depth = 0; depth <= MaxDepth; depth++ {
 		path.push(curTable)
 		idx = h60.Index(depth)
 		curNode = curTable.get(idx)
@@ -161,44 +161,55 @@ DepthIter:
 			log.Panicf("SHOULD NOT BE REACHED: depth=%d; curNode unknown type=%T;", depth, curNode)
 		}
 	}
-	if depth == MaxDepth {
-		path.push(curTable)
-		idx = h60.Index(depth)
-		curNode = curTable.Get(idx)
-
-		switch n := curNode.(type) {
-		case nil:
-			leaf = nil
-			break
-		case leafI:
-			leaf = n
-			break
-		default:
-			//case tableI:
-			log.Printf("k = %s", k)
-			log.Printf("path=%s", path)
-			log.Printf("curTable=%s", curTable.LongString("", false))
-			log.Printf("idx=%s", idx)
-			log.Printf("curNode type=%T; value=%v", curNode, curNode)
-			log.Panicf("SHOULD NOT BE REACHED; depth,%d == MaxDepth,%d & invalid type=%T;", depth, MaxDepth, curNode)
-		}
-	}
 
 	return
 }
 
 // Get(k) retrieves the value for a given key from the Hamt. The bool
 // represents whether the key was found.
-func (h Hamt) Get(k key.Key) (val interface{}, found bool) {
-	var _, leaf, _ = h.find(k)
+//func (h Hamt) Get(k key.Key) (val interface{}, found bool) {
+//	var _, leaf, _ = h.find(k)
+//
+//	if leaf == nil {
+//		//return nil, false
+//		return
+//	}
+//
+//	val, found = leaf.get(k)
+//	return
+//}
 
-	if leaf == nil {
-		//return nil, false
-		return
+// Get(k) retrieves the value for a given key from the Hamt. The bool
+// represents whether the key was found.
+func (h Hamt) Get(k key.Key) (val interface{}, found bool) {
+	if h.IsEmpty() {
+		return //nil, false
 	}
 
-	val, found = leaf.get(k)
-	return
+	var h30 = k.Hash30()
+
+	var curTable = h.root
+
+	for depth := uint(0); depth <= MaxDepth; depth++ {
+		var idx = h30.Index(depth)
+		var curNode = curTable.get(idx)
+
+		if curNode == nil {
+			return //nil, false
+		}
+
+		if leaf, isLeaf := curNode.(leafI); isLeaf {
+			val, found = leaf.get(k)
+			return
+		}
+
+		if depth == MaxDepth {
+			panic("SHOULD NOT HAPPEN")
+		}
+		curTable = curNode.(tableI)
+	}
+
+	panic("SHOULD NEVER BE REACHED")
 }
 
 // Put inserts a key/val pair into Hamt, returning a new persistent Hamt and a
