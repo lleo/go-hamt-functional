@@ -157,17 +157,18 @@ func BenchmarkHamt32Get(b *testing.B) {
 	var kvs = buildKeyVals(name, b.N, "aaa", 0)
 	var lookupHamt32 = createHamt32(name, kvs, TYP)
 
+	//kvs = genRandomizedKvs(kvs)
 	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
-		var key = kvs[i].Key
-		var val = kvs[i].Val
+	for _, kv := range kvs {
+		var key = kv.Key
+		var val = kv.Val
 		var v, found = lookupHamt32.Get(key)
 		if !found {
 			b.Fatalf("H.Get(%s) not found", key)
 		}
 		if v != val {
-			b.Fatalf("val,%v != kvs[%d].val,%v", v, i, val)
+			b.Fatalf("v,%v != val,%v for key=%s", v, val, key)
 		}
 	}
 }
