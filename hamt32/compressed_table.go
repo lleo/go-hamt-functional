@@ -211,7 +211,7 @@ func (t compressedTable) entries() []tableEntry {
 	return ents
 }
 
-func (t compressedTable) Get(idx uint) nodeI {
+func (t compressedTable) get(idx uint) nodeI {
 	var nodeBit = uint32(1 << idx)
 
 	if (t.nodeMap & nodeBit) == 0 {

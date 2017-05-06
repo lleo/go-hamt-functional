@@ -143,7 +143,7 @@ DepthIter:
 	for depth = 0; depth <= MaxDepth; depth++ {
 		path.push(curTable)
 		idx = h30.Index(depth)
-		curNode = curTable.Get(idx)
+		curNode = curTable.get(idx)
 
 		switch n := curNode.(type) {
 		case nil:

@@ -60,7 +60,7 @@ type tableI interface {
 	// from lowest index to highest.
 	entries() []tableEntry
 
-	Get(idx uint) nodeI
+	get(idx uint) nodeI
 
 	insert(idx uint, entry nodeI) tableI
 	replace(idx uint, entry nodeI) tableI
