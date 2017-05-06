@@ -168,16 +168,47 @@ DepthIter:
 
 // Get(k) retrieves the value for a given key from the Hamt. The bool
 // represents whether the key was found.
-func (h Hamt) Get(k key.Key) (val interface{}, found bool) {
-	var _, leaf, _ = h.find(k)
+//func (h Hamt) Get(k key.Key) (val interface{}, found bool) {
+//	var _, leaf, _ = h.find(k)
+//
+//	if leaf == nil {
+//		//return nil, false
+//		return
+//	}
+//
+//	val, found = leaf.get(k)
+//	return
+//}
 
-	if leaf == nil {
-		//return nil, false
-		return
+func (h Hamt) Get(k key.Key) (val interface{}, found bool) {
+	if h.IsEmpty() {
+		return //nil, false
 	}
 
-	val, found = leaf.get(k)
-	return
+	var h30 = k.Hash30()
+
+	var curTable = h.root
+
+	for depth := uint(0); depth <= MaxDepth; depth++ {
+		var idx = h30.Index(depth)
+		var curNode = curTable.get(idx)
+
+		if curNode == nil {
+			return //nil, false
+		}
+
+		if leaf, isLeaf := curNode.(leafI); isLeaf {
+			val, found = leaf.get(k)
+			return
+		}
+
+		if depth == MaxDepth {
+			panic("SHOULD NOT HAPPEN")
+		}
+		curTable = curNode.(tableI)
+	}
+
+	panic("SHOULD NEVER BE REACHED")
 }
 
 // Put inserts a key/val pair into Hamt, returning a new persistent Hamt and a
