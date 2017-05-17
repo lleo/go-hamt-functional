@@ -186,12 +186,12 @@ func (h Hamt) Get(k key.Key) (val interface{}, found bool) {
 		return //nil, false
 	}
 
-	var h30 = k.Hash30()
+	var h60 = k.Hash60()
 
 	var curTable = h.root
 
 	for depth := uint(0); depth <= MaxDepth; depth++ {
-		var idx = h30.Index(depth)
+		var idx = h60.Index(depth)
 		var curNode = curTable.get(idx)
 
 		if curNode == nil {
