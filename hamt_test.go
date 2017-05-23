@@ -47,17 +47,26 @@ const (
 )
 
 var cfgStr = []string{"hybrid", "fullonly", "componly"}
-var cfgMap = map[string]int{"hybrid": hybrid, "fullonly": fullonly, "componly": componly}
+var cfgMap = map[string]int{
+	"hybrid":   hybrid,
+	"fullonly": fullonly,
+	"componly": componly,
+}
 
 var TYP int
 var CFG string
 
 func TestMain(m *testing.M) {
 	var fullonlyOpt, componlyOpt, hybridOpt, allOpt bool
-	flag.BoolVar(&fullonlyOpt, "F", false, "Use full tables only and exclude C and H Options.")
-	flag.BoolVar(&componlyOpt, "C", false, "Use compressed tables only and exclude F and H Options.")
-	flag.BoolVar(&hybridOpt, "H", false, "Use compressed tables initially and exclude F and C Options.")
-	flag.BoolVar(&allOpt, "A", false, "Run all Tests w/ Options set to hamt32.FullTablesOnly, hamt32.CompTablesOnly, and hamt32.HybridTables; in that order.")
+	flag.BoolVar(&fullonlyOpt, "F", false,
+		"Use full tables only and exclude C and H Options.")
+	flag.BoolVar(&componlyOpt, "C", false,
+		"Use compressed tables only and exclude F and H Options.")
+	flag.BoolVar(&hybridOpt, "H", false,
+		"Use compressed tables initially and exclude F and C Options.")
+	flag.BoolVar(&allOpt, "A", false,
+		"Run all Tests w/ Options set to hamt32.FullTablesOnly, "+
+			"hamt32.CompTablesOnly, and hamt32.HybridTables; in that order.")
 
 	flag.Parse()
 
@@ -76,7 +85,6 @@ func TestMain(m *testing.M) {
 	// If no flags given, run all tests.
 	if !(allOpt || fullonlyOpt || componlyOpt || hybridOpt) {
 		allOpt = true
-		//fullonlyOpt = true
 	}
 
 	log.SetFlags(log.Lshortfile)
@@ -106,7 +114,7 @@ func TestMain(m *testing.M) {
 
 			log.Printf("allOpt: for type = %s\n", CFG)
 
-			fmt.Println("Running all tests:", CFG)
+			fmt.Printf("Running all tests: type = %s\n", CFG)
 			xit = m.Run()
 			if xit != 0 {
 				os.Exit(xit)
