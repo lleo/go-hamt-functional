@@ -19,11 +19,6 @@ type tableStack interface {
 type tableSlice []tableI
 
 // Constructs an tableSlice impl of the tableStack interface.
-//func newTableStack() tableSlice {
-//	return make(tableSlice, 0, MaxDepth)
-//}
-
-// Constructs an tableSlice impl of the tableStack interface.
 func newTableStack() tableStack {
 	var ts = make(tableSlice, 0, MaxDepth)
 	return &ts
