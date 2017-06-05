@@ -216,16 +216,14 @@ func (h Hamt) Get(k key.Key) (val interface{}, found bool) {
 func (h Hamt) Put(k key.Key, v interface{}) (nh Hamt, added bool) {
 	nh = h //copy by value
 
-	var path, leaf, idx = h.find(k)
-
-	if path == nil { // h.IsEmpty()
+	if nh.IsEmpty() {
 		nh.root = createRootTable(newFlatLeaf(k, v))
 		nh.nentries++
-
-		//return nh, true
 		added = true
 		return
 	}
+
+	var path, leaf, idx = h.find(k)
 
 	var curTable = path.pop()
 	var depth = uint(path.len())
